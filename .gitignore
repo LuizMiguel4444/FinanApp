@@ -1,0 +1,4 @@
+# Seus dados financeiros nunca devem ir para o repositório
+*historico*.json
+*backup*.json
+*.csv
