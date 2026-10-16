@@ -1,4 +1,4 @@
-# Controle financeiro
+# FinanApp
 
 Webapp instalável (PWA) para controlar compras parceladas, cartões e a previsão do mês.
 Site estático, sem build. Os dados ficam no aparelho (IndexedDB) e o app abre sem internet.
