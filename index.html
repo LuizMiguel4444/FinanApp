@@ -239,12 +239,43 @@ tfoot td{border-top:1.5px solid var(--line);border-bottom:0;font-weight:700}
 @keyframes sk{to{background-position:-200% 0}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);padding:11px 14px;border-radius:12px;font-size:14px;display:flex;gap:14px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .toast button{font-weight:700;text-decoration:underline;color:inherit;white-space:nowrap}
+
+.top-dir{display:flex;align-items:center;gap:8px}
+.icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--ink2)}
+.icon-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lock{position:fixed;inset:0;z-index:100;background:var(--bg);overflow:auto;display:flex;padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px)}
+.lk-wrap{margin:auto;width:100%;max-width:340px;text-align:center;padding:24px 0}
+.lk-logo{width:64px;height:64px;border-radius:16px;display:block;margin:0 auto 14px}
+.lk-wrap h2{font-size:24px}
+.lk-sub{margin:4px 0 0;color:var(--ink2);font-size:14px}
+.lk-dots{display:flex;gap:14px;justify-content:center;margin:20px 0 8px}
+.lk-dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink2)}
+.lk-dots i.on{background:var(--ink);border-color:var(--ink)}
+.lk-dots.tremer{animation:lk-tremer .35s}
+@keyframes lk-tremer{20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+.lk-msg{min-height:22px;margin:0 0 8px;color:var(--bad);font-size:14px}
+.lk-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:290px;margin:6px auto 0}
+.lk-pad.off{opacity:.4;pointer-events:none}
+.lk-pad button{height:64px;border-radius:18px;background:var(--surface);border:1px solid var(--line);font:600 26px var(--fd);display:grid;place-items:center;text-align:center;color:var(--ink)}
+.lk-pad button:active{background:var(--line2)}
+.lk-pad button.vazio{visibility:hidden}
+.lk-pad svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lk-rodape{display:flex;justify-content:center;gap:20px;margin-top:20px}
+.lk-rodape button{color:var(--accent);font-weight:600;font-size:14px;padding:6px}
+.lk-sep{height:1px;background:var(--line);margin:22px 0}
+#lk-rec{text-align:left}
+#lk-rec h2{text-align:center}
+#lk-rec .lk-sub{text-align:center;margin-bottom:14px}
+.capa{display:none;position:fixed;inset:0;z-index:120;background:var(--bg);align-items:center;justify-content:center}
+.capa img{width:72px;height:72px;border-radius:18px}
+body.cobrir .capa{display:flex}
+.codigo{font:700 21px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.05em;text-align:center;padding:16px 8px;border:1.5px dashed var(--line);border-radius:14px;margin:6px 0 14px;user-select:all;word-break:break-all}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="top"><h1>FinanApp</h1><span id="status"></span></div>
+  <div class="top"><h1>FinanApp</h1><div class="top-dir"><button id="btn-lock" class="icon-btn" data-act="lk-bloquear" aria-label="Bloquear agora" hidden><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button><span id="status"></span></div></div>
   <main id="view"></main>
 </div>
 
@@ -262,6 +293,33 @@ tfoot td{border-top:1.5px solid var(--line);border-bottom:0;font-weight:700}
   <div class="panel" role="dialog" aria-modal="true" id="sheet-body"></div>
 </div>
 <div id="toast" class="toast" role="status" hidden></div>
+<div id="lock" class="lock" hidden role="dialog" aria-modal="true" aria-labelledby="lk-titulo">
+  <div class="lk-wrap">
+    <img class="lk-logo" src="icon-192.png" alt="" width="64" height="64">
+    <div id="lk-teclado">
+      <h2 id="lk-titulo">FinanApp</h2>
+      <p id="lk-sub" class="lk-sub"></p>
+      <div id="lk-dots" class="lk-dots" role="img"></div>
+      <p id="lk-msg" class="lk-msg" role="alert"></p>
+      <div id="lk-pad" class="lk-pad"></div>
+      <div class="lk-rodape"><button id="lk-esqueci" data-act="lk-esqueci">Esqueci o PIN</button><button id="lk-cancelar" data-act="lk-cancelar" hidden>Cancelar</button></div>
+    </div>
+    <div id="lk-rec" hidden>
+      <h2>Esqueci o PIN</h2>
+      <p class="lk-sub">Use o código de recuperação que você guardou ao ativar o bloqueio.</p>
+      <label class="f"><span>Código de recuperação</span><input id="lk-cod" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
+      <p id="lk-rec-msg" class="lk-msg" role="alert"></p>
+      <button class="btn primary block" data-act="lk-cod-ok">Usar código</button>
+      <div class="lk-sep"></div>
+      <p class="lk-sub">Sem o código, a saída é apagar os dados deste aparelho e restaurar um backup depois.</p>
+      <label class="f" style="margin-top:12px"><span>Para apagar tudo, digite APAGAR</span><input id="lk-apagar-txt" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <button id="lk-apagar-btn" class="btn danger block" data-act="lk-apagar-tudo" disabled>Apagar dados deste aparelho</button>
+      <div class="lk-rodape"><button data-act="lk-rec-voltar">Voltar</button></div>
+    </div>
+  </div>
+</div>
+<div id="capa" class="capa" aria-hidden="true"><img src="icon-192.png" alt="" width="72" height="72"></div>
+
 
 <script>
 (function(){
@@ -270,7 +328,7 @@ tfoot td{border-top:1.5px solid var(--line);border-bottom:0;font-weight:700}
 /* =========================================================
    Constantes e utilitários
    ========================================================= */
-var VERSAO_APP='2.1.0';
+var VERSAO_APP='2.2.0';
 var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var PALETA=['#8A05BE','#0B7FBF','#D6336C','#198F83','#C27803','#3C8D2F','#E8590C','#5C7CFA','#7048E8','#868E96'];
@@ -317,7 +375,8 @@ var S={
   F:{pessoa:null,busca:'',tipo:'todos',categoria:null,ordem:'padrao'},
   H:{pessoa:null,inst:null,de:null,ate:null,busca:''},
   fechAberto:false,deletado:null,edit:null,novoMes:null,import:null,scrollChip:true,
-  tt:null,closeT:null,sheetPushed:false,skipPop:false,installEv:null,persistido:null,snaps:[]
+  tt:null,closeT:null,sheetPushed:false,skipPop:false,installEv:null,persistido:null,snaps:[],
+  bloqueado:false,acaoPendente:null,ocultoEm:0,bioOk:null
 };
 var mesKeys=function(){return Object.keys(S.D.meses).sort();};
 var prevKeys=function(){return Object.keys(S.D.prevs).sort();};
@@ -338,7 +397,7 @@ function abrirDB(){
   return new Promise(function(res,rej){
     var r=indexedDB.open('controle-financeiro',1);
     r.onupgradeneeded=function(){var d=r.result;d.createObjectStore('kv');d.createObjectStore('snap',{keyPath:'ts'});};
-    r.onsuccess=function(){res(r.result);};
+    r.onsuccess=function(){var db=r.result;db.onversionchange=function(){db.close();try{location.reload();}catch(e){}};res(db);};
     r.onerror=function(){rej(r.error);};
   });
 }
@@ -1364,6 +1423,7 @@ function vAjustes(){
   else instalar='<p class="sub" style="margin:0">No Chrome, abra o menu ⋮ e escolha “Instalar app” (ou “Adicionar à tela inicial”).</p>';
   return '<div class="card"><h3>Pessoas</h3><p class="sub">Quem divide as compras com você.</p>'+pessoasHtml+'<div style="margin-top:10px"><button class="btn sm" data-act="pessoa-nova">+ Nova pessoa</button></div></div>'+
     '<div class="card"><h3>Instituições</h3><p class="sub">Cartões, contas e financiamentos.</p>'+instsHtml+'<div style="margin-top:10px"><button class="btn sm" data-act="inst-nova">+ Nova instituição</button></div></div>'+
+    vSeguranca()+
     '<div class="card"><h3>Seu histórico</h3><p class="sub">Tudo fica guardado neste aparelho, mesmo sem internet.</p>'+
       '<div class="kv"><span>Meses</span><b>'+mesKeys().length+'</b></div><div class="kv"><span>Compras lançadas</span><b>'+compras+'</b></div><div class="kv"><span>Último backup</span><b>'+ult+'</b></div>'+
       '<div class="kv"><span>Proteção contra limpeza automática</span><b>'+(S.persistido==null?'—':(S.persistido?'ativa':'não concedida'))+'</b></div></div>'+
@@ -1376,11 +1436,258 @@ function vAjustes(){
 }
 
 /* =========================================================
+   Bloqueio do app (PIN e digital/rosto)
+   É uma barreira de uso: impede que outra pessoa abra o app.
+   O PIN nunca é guardado; só um hash com sal (PBKDF2).
+   ========================================================= */
+var ENC=(typeof TextEncoder!=='undefined')?new TextEncoder():null;
+var ALFA='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+var AUTO_OPCOES=[[0,'Imediatamente'],[60,'Após 1 minuto'],[300,'Após 5 minutos'],[900,'Após 15 minutos']];
+var LK={modo:'unlock',n:6,pin:'',primeiro:null,cb:null,cancelavel:false,ocupado:false,timer:null};
+var ICO_BIO='<svg viewBox="0 0 24 24"><path d="M12 11a2 2 0 0 0-2 2c0 1.5-.3 3-1 4.5"/><path d="M12 7a6 6 0 0 0-6 6c0 1.2-.2 2.4-.6 3.5"/><path d="M16 14c0 2-.4 3.8-1.2 5.5"/><path d="M12 3a10 10 0 0 0-10 10"/><path d="M12 3a10 10 0 0 1 10 10c0 1.3-.1 2.5-.4 3.7"/><path d="M12 11a2 2 0 0 1 2 2c0 .7 0 1.3-.1 2"/></svg>';
+var ICO_APAGAR='<svg viewBox="0 0 24 24"><path d="M20 5H9l-6 7 6 7h11a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M15 9l-4 6M11 9l4 6"/></svg>';
+
+function cripto(){return !!(window.crypto&&window.crypto.subtle&&window.crypto.getRandomValues&&ENC);}
+function lockCfg(){return(S.meta&&S.meta.bloqueio&&S.meta.bloqueio.ativo)?S.meta.bloqueio:null;}
+function lockAtivo(){return !!lockCfg();}
+function b64(buf){var a=new Uint8Array(buf),s='';for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+function unb64(s){var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
+function b64u(buf){return b64(buf).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function unb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return unb64(s);}
+function aleatorio(n){return crypto.getRandomValues(new Uint8Array(n));}
+async function derivar(segredo,saltB64,iter){
+  var chave=await crypto.subtle.importKey('raw',ENC.encode(segredo),'PBKDF2',false,['deriveBits']);
+  var bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:unb64(saltB64),iterations:iter,hash:'SHA-256'},chave,256);
+  return b64(bits);
+}
+async function novoSegredo(segredo){var s=b64(aleatorio(16)),i=150000;return{s:s,i:i,h:await derivar(segredo,s,i)};}
+async function confere(segredo,reg){
+  if(!reg)return false;
+  var h=await derivar(segredo,reg.s,reg.i);
+  if(h.length!==reg.h.length)return false;
+  var r=0;for(var i=0;i<h.length;i++)r|=h.charCodeAt(i)^reg.h.charCodeAt(i);
+  return r===0;
+}
+function gerarCodigo(){var a=aleatorio(16),s='';for(var i=0;i<16;i++){s+=ALFA[a[i]&31];if(i%4===3&&i<15)s+='-';}return s;}
+function normCodigo(c){return String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function fmtSeg(s){return Math.floor(s/60)+':'+pad(s%60);}
+
+/* digital ou rosto, pelo leitor do próprio aparelho (WebAuthn) */
+function bioSuportada(){return !!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create&&navigator.credentials.get);}
+async function bioDisponivel(){try{return !!(bioSuportada()&&await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());}catch(e){return false;}}
+function bioAtiva(){var B=lockCfg();return !!(B&&B.bio&&bioSuportada());}
+async function registrarBio(){
+  try{
+    var cred=await navigator.credentials.create({publicKey:{
+      challenge:aleatorio(32),rp:{name:'FinanApp',id:location.hostname},
+      user:{id:aleatorio(16),name:'finanapp',displayName:'FinanApp'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},
+      timeout:60000,attestation:'none'}});
+    if(!cred)return false;
+    S.meta.bloqueio.bio={id:b64u(cred.rawId)};salvarMeta();return true;
+  }catch(e){return false;}
+}
+async function autenticarBio(){
+  var B=lockCfg();if(!B||!B.bio)return false;
+  try{
+    var r=await navigator.credentials.get({publicKey:{challenge:aleatorio(32),rpId:location.hostname,
+      allowCredentials:[{type:'public-key',id:unb64u(B.bio.id),transports:['internal']}],userVerification:'required',timeout:60000}});
+    if(!r||!r.response)return false;
+    var ad=new Uint8Array(r.response.authenticatorData);
+    return ad.length>32&&(ad[32]&4)===4;   /* bit "usuário verificado" */
+  }catch(e){return false;}
+}
+
+/* tela de bloqueio e teclado numérico */
+function lkEl(id){return document.getElementById(id);}
+function lkMsg(t){lkEl('lk-msg').textContent=t||'';}
+function lkInert(v){['.app','.nav','#fab','#sheet'].forEach(function(s){var e=document.querySelector(s);if(e){if(v)e.setAttribute('inert','');else e.removeAttribute('inert');}});}
+function lkMostrar(){lkEl('lock').hidden=false;lkInert(true);}
+function lkFechar(){clearInterval(LK.timer);lkEl('lock').hidden=true;lkInert(false);LK.pin='';LK.cb=null;LK.primeiro=null;}
+function lkRestante(){var B=lockCfg();return(B&&B.ate>Date.now())?Math.ceil((B.ate-Date.now())/1000):0;}
+function lkTextos(){
+  var t={unlock:['FinanApp','Digite seu PIN'],verificar:['Confirme seu PIN','Digite o PIN atual'],
+    criar:['Crie um PIN','Escolha '+LK.n+' dígitos'],confirmar:['Repita o PIN','Digite o mesmo PIN de novo']}[LK.modo];
+  lkEl('lk-titulo').textContent=t[0];lkEl('lk-sub').textContent=t[1];
+}
+function lkDesenhar(){
+  var d='';for(var i=0;i<LK.n;i++)d+='<i class="'+(i<LK.pin.length?'on':'')+'"></i>';
+  var el=lkEl('lk-dots');el.innerHTML=d;el.setAttribute('aria-label',LK.pin.length+' de '+LK.n+' dígitos');
+}
+function lkMontarPad(){
+  var h='';
+  for(var d=1;d<=9;d++)h+='<button data-act="lk-d" data-d="'+d+'" aria-label="'+d+'">'+d+'</button>';
+  var bio=(LK.modo==='unlock'||LK.modo==='verificar')&&bioAtiva();
+  h+=bio?'<button data-act="lk-bio" aria-label="Usar digital ou rosto">'+ICO_BIO+'</button>':'<button class="vazio" tabindex="-1" aria-hidden="true"></button>';
+  h+='<button data-act="lk-d" data-d="0" aria-label="0">0</button><button data-act="lk-apagar" aria-label="Apagar">'+ICO_APAGAR+'</button>';
+  lkEl('lk-pad').innerHTML=h;
+}
+function lkAbrir(o){
+  LK.modo=o.modo;LK.n=o.n||6;LK.pin='';LK.primeiro=null;LK.cb=o.cb||null;LK.cancelavel=!!o.cancelavel;LK.ocupado=false;
+  lkEl('lk-rec').hidden=true;lkEl('lk-teclado').hidden=false;lkMsg('');
+  lkTextos();lkMontarPad();lkDesenhar();
+  lkEl('lk-cancelar').hidden=!LK.cancelavel;
+  lkEl('lk-esqueci').hidden=LK.modo!=='unlock';
+  lkMostrar();lkAtualizarBloqueio();
+}
+function lkAtualizarBloqueio(){
+  clearInterval(LK.timer);
+  var pad=lkEl('lk-pad'),r=lkRestante();
+  if(r>0){
+    pad.classList.add('off');lkMsg('Muitas tentativas. Tente de novo em '+fmtSeg(r)+'.');
+    LK.timer=setInterval(function(){
+      var x=lkRestante();
+      if(x<=0){clearInterval(LK.timer);pad.classList.remove('off');lkMsg('');}
+      else lkMsg('Muitas tentativas. Tente de novo em '+fmtSeg(x)+'.');
+    },1000);
+  }else pad.classList.remove('off');
+}
+function lkTremer(){var d=lkEl('lk-dots');d.classList.remove('tremer');void d.offsetWidth;d.classList.add('tremer');}
+function lkDigito(d){
+  if(LK.ocupado||LK.pin.length>=LK.n)return;
+  if((LK.modo==='unlock'||LK.modo==='verificar')&&lkRestante()>0)return;
+  LK.pin+=d;lkMsg('');lkDesenhar();
+  if(LK.pin.length===LK.n)lkChecar();
+}
+function lkApagar(){if(LK.ocupado||!LK.pin.length)return;LK.pin=LK.pin.slice(0,-1);lkDesenhar();}
+function lkCancelar(){if(LK.cancelavel)lkFechar();}
+function lkSucesso(){
+  var cb=LK.cb,modo=LK.modo;
+  lkFechar();
+  if(modo==='unlock'){
+    S.bloqueado=false;render();
+    var ac=S.acaoPendente;S.acaoPendente=null;
+    if(ac==='nova-compra'&&mesKeys().length)abrirItem(null);
+  }else if(cb)cb();
+}
+async function lkChecar(){
+  if(LK.ocupado||LK.pin.length<LK.n)return;
+  var pin=LK.pin;LK.ocupado=true;
+  try{
+    if(LK.modo==='criar'){LK.primeiro=pin;LK.modo='confirmar';LK.pin='';lkTextos();lkDesenhar();lkMontarPad();return;}
+    if(LK.modo==='confirmar'){
+      if(pin!==LK.primeiro){LK.modo='criar';LK.primeiro=null;LK.pin='';lkTextos();lkDesenhar();lkMsg('Os PINs não conferem. Comece de novo.');lkTremer();return;}
+      var cb=LK.cb;lkFechar();
+      if(cb)await cb(pin);
+      return;
+    }
+    var B=lockCfg();if(!B||lkRestante()>0)return;
+    if(await confere(pin,B.pin)){B.falhas=0;B.ate=0;salvarMeta();lkSucesso();return;}
+    B.falhas=(B.falhas||0)+1;
+    var rest=5-(B.falhas%5);
+    if(B.falhas%5===0)B.ate=Date.now()+Math.min(900,30*Math.pow(2,B.falhas/5-1))*1000;
+    salvarMeta();
+    LK.pin='';lkDesenhar();lkTremer();
+    if(B.ate>Date.now())lkAtualizarBloqueio();
+    else lkMsg(rest<=2?('PIN incorreto. Restam '+rest+' tentativa'+(rest>1?'s':'')+' antes de uma pausa.'):'PIN incorreto.');
+  }finally{LK.ocupado=false;}
+}
+async function lkBio(){
+  if(LK.ocupado||!bioAtiva()||(LK.modo!=='unlock'&&LK.modo!=='verificar')||lkRestante()>0)return;
+  LK.ocupado=true;
+  var ok=false;
+  try{ok=await autenticarBio();}finally{LK.ocupado=false;}
+  if(ok){var B=lockCfg();if(B){B.falhas=0;B.ate=0;salvarMeta();}lkSucesso();}
+  else lkMsg('Não foi possível usar a digital ou o rosto. Digite o PIN.');
+}
+function lkAbrirUnlock(){
+  var B=lockCfg();if(!B)return;
+  lkAbrir({modo:'unlock',n:B.pin.n});
+  if(bioAtiva()&&lkRestante()===0)setTimeout(lkBio,350);
+}
+function bloquear(){
+  if(!lockAtivo()||S.bloqueado)return;
+  S.bloqueado=true;fecharSheet();$('#toast').hidden=true;render();lkAbrirUnlock();
+}
+
+/* esqueci o PIN */
+function lkEsqueci(){
+  lkEl('lk-teclado').hidden=true;lkEl('lk-rec').hidden=false;
+  lkEl('lk-rec-msg').textContent='';lkEl('lk-cod').value='';lkEl('lk-apagar-txt').value='';lkEl('lk-apagar-btn').disabled=true;
+  setTimeout(function(){lkEl('lk-cod').focus();},50);
+}
+function lkRecVoltar(){lkEl('lk-rec').hidden=true;lkEl('lk-teclado').hidden=false;}
+async function lkUsarCodigo(){
+  var B=lockCfg(),cod=normCodigo(lkEl('lk-cod').value),msg=lkEl('lk-rec-msg');
+  if(!B)return;
+  if(cod.length!==16){msg.textContent='O código tem 16 letras e números.';return;}
+  if(!(await confere(cod,B.rec))){msg.textContent='Código incorreto.';return;}
+  B.falhas=0;B.ate=0;salvarMeta();
+  lkAbrir({modo:'criar',n:B.pin.n,cancelavel:false,cb:async function(pin){
+    var reg=await novoSegredo(pin),B2=lockCfg();
+    B2.pin={s:reg.s,i:reg.i,h:reg.h,n:B2.pin.n};B2.falhas=0;B2.ate=0;salvarMeta();
+    S.bloqueado=false;render();toast('PIN redefinido.');
+    var ac=S.acaoPendente;S.acaoPendente=null;
+    if(ac==='nova-compra'&&mesKeys().length)abrirItem(null);
+  }});
+  lkEl('lk-sub').textContent='Código aceito. Crie um novo PIN de '+B.pin.n+' dígitos.';
+}
+function lkApagarTudo(){
+  if(lkEl('lk-apagar-txt').value.trim().toUpperCase()!=='APAGAR')return;
+  try{S.idb.close();}catch(e){}
+  var fim=function(){try{location.reload();}catch(e){}};
+  var rq=indexedDB.deleteDatabase('controle-financeiro');
+  rq.onsuccess=fim;rq.onerror=fim;
+}
+
+/* ativar, alterar e desativar (Ajustes) */
+function lkVerificar(cb){var B=lockCfg();if(B)lkAbrir({modo:'verificar',n:B.pin.n,cancelavel:true,cb:cb});}
+function lkAtivar(){
+  if(!cripto()){toast('O bloqueio só funciona em endereço seguro (https).');return;}
+  S.edit={tipo:'lk',n:6};
+  abrirSheet('<h2>Ativar bloqueio</h2><p class="sub">Escolha o tamanho do PIN. Depois você cria o PIN e recebe um código de recuperação.</p>'+
+    '<div class="chipset"><button class="chip" data-act="lk-n" data-n="4" aria-pressed="false">4 dígitos</button><button class="chip" data-act="lk-n" data-n="6" aria-pressed="true">6 dígitos</button></div>'+
+    '<div class="acoes"><span class="sp"></span><button class="btn" data-act="sheet-close">Cancelar</button><button class="btn primary" data-act="lk-criar">Continuar</button></div>',false);
+}
+async function lkConcluirCriacao(pin,n){
+  var reg=await novoSegredo(pin),cod=gerarCodigo(),rec=await novoSegredo(normCodigo(cod)),ant=S.meta.bloqueio||{};
+  S.meta.bloqueio={ativo:true,pin:{s:reg.s,i:reg.i,h:reg.h,n:n},rec:rec,bio:ant.bio||null,auto:ant.auto==null?60:ant.auto,falhas:0,ate:0};
+  salvarMeta();render();
+  lkMostrarCodigo(cod,true);
+}
+async function lkConcluirTroca(pin){
+  var reg=await novoSegredo(pin),B=lockCfg();
+  B.pin={s:reg.s,i:reg.i,h:reg.h,n:B.pin.n};B.falhas=0;B.ate=0;salvarMeta();
+  toast('PIN alterado.');
+}
+function lkMostrarCodigo(cod,oferecerBio){
+  S.edit={tipo:'codigo',cod:cod,bio:!!oferecerBio};
+  abrirSheet('<h2>Guarde este código</h2><p class="sub">Se você esquecer o PIN, este código libera o app sem apagar nada. Ele não será mostrado de novo.</p>'+
+    '<div class="codigo" id="cod-txt">'+esc(cod)+'</div>'+
+    '<div class="acoes"><button class="btn" data-act="lk-copiar">Copiar</button><span class="sp"></span><button class="btn primary" data-act="lk-guardei">Já guardei</button></div>',false);
+}
+function lkOferecerBio(){
+  abrirSheet('<h2>Usar digital ou rosto?</h2><p class="sub">Você abre o app com a digital ou o rosto, e o PIN continua valendo como alternativa.</p>'+
+    '<div class="acoes"><span class="sp"></span><button class="btn" data-act="sheet-close">Agora não</button><button class="btn primary" data-act="lk-bio-ativar">Ativar</button></div>',false);
+}
+function lkBioToggle(){
+  if(bioAtiva()){S.meta.bloqueio.bio=null;salvarMeta();render();toast('Digital ou rosto desativado.');return;}
+  registrarBio().then(function(ok){render();toast(ok?'Digital ou rosto ativado.':'Não foi possível ativar a digital ou o rosto.');});
+}
+function vSeguranca(){
+  var B=lockCfg();
+  if(!cripto())return '<div class="card"><h3>Bloqueio do app</h3><p class="sub" style="margin:0">Disponível quando o app é aberto por um endereço seguro (https).</p></div>';
+  if(!B)return '<div class="card"><h3>Bloqueio do app</h3><p class="sub">Peça um PIN para abrir o FinanApp. Se o aparelho tiver digital ou rosto, dá para usar como atalho.</p><button class="btn primary block" data-act="lk-ativar">Ativar bloqueio</button></div>';
+  var auto=B.auto==null?60:B.auto,bio=bioAtiva();
+  return '<div class="card"><h3>Bloqueio do app</h3><p class="sub">Ativado com PIN de '+B.pin.n+' dígitos'+(bio?' e digital ou rosto':'')+'.</p>'+
+    '<label class="f"><span>Bloquear automaticamente</span><select id="lk-auto">'+AUTO_OPCOES.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===auto?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
+    '<div style="display:grid;gap:8px"><button class="btn primary block" data-act="lk-bloquear">Bloquear agora</button>'+
+    '<button class="btn block" data-act="lk-trocar">Alterar PIN</button>'+
+    (bio?'<button class="btn block" data-act="lk-biotoggle">Desativar digital ou rosto</button>':(S.bioOk?'<button class="btn block" data-act="lk-biotoggle">Usar digital ou rosto</button>':''))+
+    '<button class="btn block" data-act="lk-novocod">Gerar novo código de recuperação</button>'+
+    '<button class="btn danger block" data-act="lk-desativar">Desativar bloqueio</button></div>'+
+    '<p class="hint">O bloqueio impede que outras pessoas abram o app neste aparelho. Os arquivos de backup que você baixa não são protegidos.</p></div>';
+}
+
+/* =========================================================
    Render
    ========================================================= */
 function render(){
   var st=$('#status');if(st)st.innerHTML=pill();
+  var bl=$('#btn-lock');if(bl)bl.hidden=!lockAtivo()||S.bloqueado;
   document.querySelectorAll('.nav button').forEach(function(b){b.setAttribute('aria-current',b.dataset.aba===S.aba?'page':'false');});
+  if(S.bloqueado){$('#view').innerHTML='';$('#fab').hidden=true;return;}
   var fn={mes:vMes,resumo:vResumo,prev:vPrev,ajustes:vAjustes}[S.aba];
   var ae=document.activeElement,foco=ae&&(ae.id==='busca'||ae.id==='hbusca')?ae.id:null;
   $('#view').innerHTML=fn();
@@ -1462,6 +1769,25 @@ document.addEventListener('click',function(e){
     case 'restaurar':abrirRestaurar(+t.dataset.ts);break;
     case 'restaurar-ok':restaurar();break;
     case 'instalar':if(S.installEv){S.installEv.prompt();S.installEv.userChoice.then(function(){S.installEv=null;render();});}break;
+    case 'lk-d':lkDigito(t.dataset.d);break;
+    case 'lk-apagar':lkApagar();break;
+    case 'lk-bio':lkBio();break;
+    case 'lk-cancelar':lkCancelar();break;
+    case 'lk-esqueci':lkEsqueci();break;
+    case 'lk-rec-voltar':lkRecVoltar();break;
+    case 'lk-cod-ok':lkUsarCodigo();break;
+    case 'lk-apagar-tudo':lkApagarTudo();break;
+    case 'lk-bloquear':bloquear();break;
+    case 'lk-ativar':lkAtivar();break;
+    case 'lk-n':if(S.edit&&S.edit.tipo==='lk'){S.edit.n=+t.dataset.n;document.querySelectorAll('[data-act="lk-n"]').forEach(function(b){b.setAttribute('aria-pressed',String(b===t));});}break;
+    case 'lk-criar':if(S.edit&&S.edit.tipo==='lk'){var nn=S.edit.n;fecharSheet();lkAbrir({modo:'criar',n:nn,cancelavel:true,cb:function(pin){return lkConcluirCriacao(pin,nn);}});}break;
+    case 'lk-trocar':lkVerificar(function(){lkAbrir({modo:'criar',n:lockCfg().pin.n,cancelavel:true,cb:lkConcluirTroca});});break;
+    case 'lk-desativar':lkVerificar(function(){S.meta.bloqueio=null;salvarMeta();render();toast('Bloqueio desativado.');});break;
+    case 'lk-novocod':lkVerificar(async function(){var cod=gerarCodigo(),rec=await novoSegredo(normCodigo(cod));lockCfg().rec=rec;salvarMeta();lkMostrarCodigo(cod,false);});break;
+    case 'lk-biotoggle':lkBioToggle();break;
+    case 'lk-copiar':try{navigator.clipboard.writeText(S.edit.cod).then(function(){toast('Código copiado.');},function(){toast('Não foi possível copiar. Anote o código.');});}catch(err){toast('Não foi possível copiar. Anote o código.');}break;
+    case 'lk-guardei':var oferecer=S.edit&&S.edit.bio;fecharSheet();toast('Bloqueio ativado.');if(oferecer&&S.bioOk&&!bioAtiva())setTimeout(lkOferecerBio,320);break;
+    case 'lk-bio-ativar':registrarBio().then(function(ok){fecharSheet();render();toast(ok?'Digital ou rosto ativado.':'Não foi possível ativar a digital ou o rosto.');});break;
     case 'tema':try{localStorage.setItem('cf-tema',t.dataset.t);}catch(err){}aplicarTema(t.dataset.t);render();break;
   }
 });
@@ -1472,6 +1798,7 @@ document.addEventListener('change',function(e){
   else if(t.dataset.hsel==='h-de'){S.H.de=t.value;if(S.H.ate&&S.H.ate<t.value)S.H.ate=t.value;render();}
   else if(t.dataset.hsel==='h-ate'){S.H.ate=t.value;if(S.H.de&&S.H.de>t.value)S.H.de=t.value;render();}
   else if(t.id==='arq'&&t.files&&t.files[0])lerArquivo(t.files[0]);
+  else if(t.id==='lk-auto'&&lockCfg()){S.meta.bloqueio.auto=+t.value;salvarMeta();}
 });
 var tBusca=null;
 document.addEventListener('input',function(e){
@@ -1479,6 +1806,7 @@ document.addEventListener('input',function(e){
   if(t.id==='busca'||t.id==='hbusca'){
     clearTimeout(tBusca);
     tBusca=setTimeout(function(){if(t.id==='busca')S.F.busca=t.value.trim();else S.H.busca=t.value.trim();render();},140);
+  }else if(t.id==='lk-apagar-txt'){lkEl('lk-apagar-btn').disabled=t.value.trim().toUpperCase()!=='APAGAR';
   }else if(t.dataset&&t.dataset.fech!==undefined&&t.dataset.fech!=='notas')fechAtualizar();
   else if(t.id==='a-qtd')adAtualizarValor();
   else if(t.id==='a-valor'&&S.edit&&S.edit.tipo==='adiantar')S.edit.editouValor=true;
@@ -1487,10 +1815,30 @@ document.addEventListener('toggle',function(e){
   if(e.target&&e.target.hasAttribute&&e.target.hasAttribute('data-fech-det'))S.fechAberto=e.target.open;
 },true);
 document.addEventListener('keydown',function(e){
+  if(!lkEl('lock').hidden){
+    if(!lkEl('lk-teclado').hidden){
+      if(/^[0-9]$/.test(e.key)){e.preventDefault();lkDigito(e.key);}
+      else if(e.key==='Backspace'){e.preventDefault();lkApagar();}
+      else if(e.key==='Escape')lkCancelar();
+    }
+    return;
+  }
   if(e.key==='Escape'&&!$('#sheet').hidden)fecharSheet();
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-act]')){e.preventDefault();e.target.dispatchEvent(new MouseEvent('click',{bubbles:true}));}
 });
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'&&S.idb)snapSeNecessario();});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden'){
+    if(S.idb)snapSeNecessario();
+    if(lockAtivo()){document.body.classList.add('cobrir');if(!S.bloqueado)S.ocultoEm=Date.now();}
+  }else{
+    document.body.classList.remove('cobrir');
+    var B=lockCfg();
+    if(B&&!S.bloqueado&&S.ocultoEm){
+      if((Date.now()-S.ocultoEm)/1000>=(B.auto==null?60:B.auto))bloquear();
+    }
+    S.ocultoEm=0;
+  }
+});
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();S.installEv=e;if(S.aba==='ajustes')render();});
 window.addEventListener('appinstalled',function(){S.installEv=null;if(S.aba==='ajustes')render();});
 
@@ -1506,10 +1854,13 @@ async function init(){
   }catch(e){setStatus('sem-idb');S.pronto=true;render();return;}
   S.pronto=true;setStatus('salvo');
   var acao=new URLSearchParams(location.search).get('acao');
+  if(lockAtivo())S.bloqueado=true;
   render();
-  protegerArmazenamento().then(function(){if(S.aba==='ajustes')render();});
+  if(S.bloqueado){S.acaoPendente=(acao==='nova-compra')?acao:null;lkAbrirUnlock();}
+  protegerArmazenamento().then(function(){if(S.aba==='ajustes'&&!S.bloqueado)render();});
+  bioDisponivel().then(function(v){S.bioOk=v;if(S.aba==='ajustes'&&!S.bloqueado)render();});
   snapSeNecessario();
-  if(acao==='nova-compra'&&mesKeys().length)abrirItem(null);
+  if(acao==='nova-compra'&&!S.bloqueado&&mesKeys().length)abrirItem(null);
   if('serviceWorker' in navigator&&location.protocol!=='file:'){navigator.serviceWorker.register('sw.js').catch(function(){});}
 }
 init();
