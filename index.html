@@ -211,6 +211,7 @@ tfoot td{border-top:1.5px solid var(--line);border-bottom:0;font-weight:700}
 .lin{display:flex;justify-content:space-between;gap:12px;width:100%;padding:11px 16px;border-bottom:1px solid var(--line2);align-items:baseline}
 .lin small{display:block;color:var(--ink2);font-size:12px;line-height:1.3;margin-top:1px}
 .lin.ent .v{color:var(--ok);font-weight:600}
+.lin.sai .v{color:var(--bad);font-weight:600}
 .lin .v{white-space:nowrap}
 .lin.saldo{color:var(--ink2);background:var(--line2)}
 .bloco .add{display:flex;gap:8px;padding:10px 12px}
@@ -329,7 +330,7 @@ body.cobrir .capa{display:flex}
 /* =========================================================
    Constantes e utilitários
    ========================================================= */
-var VERSAO_APP='2.4.0';
+var VERSAO_APP='2.5.0';
 var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var PALETA=['#8A05BE','#0B7FBF','#D6336C','#198F83','#C27803','#3C8D2F','#E8590C','#5C7CFA','#7048E8','#868E96'];
@@ -363,6 +364,28 @@ function parseParcela(p){var m=/^\s*(\d+)\s*\/\s*(\d+)/.exec(String(p==null?'':p
 function lab(k){var a=k.split('-').map(Number);return{y:a[0],m:a[1],nome:MESES[a[1]-1],abr:ABR[a[1]-1]};}
 function somaMeses(k,n){var a=k.split('-').map(Number),y=a[0],m=a[1]+n;y+=Math.floor((m-1)/12);m=((m-1)%12+12)%12+1;return y+'-'+pad(m);}
 function hojeKey(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1);}
+function diaStr(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function diasNoMes(y,m){return new Date(y,m,0).getDate();}
+/* Mês da fatura aberta hoje: passado o dia de fechamento, vale o mês seguinte. */
+function mesDaFatura(I){
+  var d=new Date(),y=d.getFullYear(),m=d.getMonth()+1,k=y+'-'+pad(m),f=I&&I.diaFechamento;
+  return(f&&d.getDate()>Math.min(f,diasNoMes(y,m)))?somaMeses(k,1):k;
+}
+function algumFechamento(){return instsAtivas().some(function(I){return !!I.diaFechamento;});}
+/* Mês que a aba Mês abre por padrão: com uma instituição escolhida vale o fechamento dela;
+   em "Todas", o mês da fatura mais antiga que ainda está aberta. */
+function mesAtualAlvo(){
+  if(S.inst!=='todas'){var I=inst(S.inst);return(I&&I.diaFechamento)?mesDaFatura(I):hojeKey();}
+  var ms=instsAtivas().filter(function(I){return !!I.diaFechamento;}).map(mesDaFatura).sort();
+  return ms.length?ms[0]:hojeKey();
+}
+function melhorMes(keys,alvo){
+  if(keys.indexOf(alvo)>-1)return alvo;
+  var ant=keys.filter(function(k){return k<alvo;});
+  return ant.length?ant[ant.length-1]:keys[0];
+}
+/* escolha do usuário vale até o fim do dia; depois a aba volta a seguir a fatura atual */
+function escolherMes(k){S.mesSel=k;S.mesManualDia=diaStr();}
 function escolher(lista,atual){if(atual&&lista.indexOf(atual)>-1)return atual;var h=hojeKey();return lista.indexOf(h)>-1?h:(lista[lista.length-1]||null);}
 function mesCurto(k){var l=lab(k);return l.abr+'/'+String(l.y).slice(2);}
 
@@ -377,7 +400,8 @@ var S={
   H:{pessoa:null,inst:null,de:null,ate:null,busca:''},
   fechAberto:false,deletado:null,edit:null,novoMes:null,import:null,scrollChip:true,
   tt:null,closeT:null,sheetPushed:false,skipPop:false,installEv:null,persistido:null,snaps:[],
-  bloqueado:false,acaoPendente:null,ocultoEm:0,bioOk:null
+  bloqueado:false,acaoPendente:null,ocultoEm:0,bioOk:null,
+  mesManualDia:null,alvoAtual:null,avisoFaturaOculto:null,prevExcluida:null
 };
 var mesKeys=function(){return Object.keys(S.D.meses).sort();};
 var prevKeys=function(){return Object.keys(S.D.prevs).sort();};
@@ -689,6 +713,15 @@ function avisoBackup(){
   var txt=ult?('Seu último backup foi em '+new Date(ult).toLocaleDateString('pt-BR')+'.'):'Você ainda não baixou nenhum backup.';
   return '<div class="aviso"><p><b>Guarde uma cópia.</b> Os dados ficam neste aparelho. '+txt+'</p><div class="acoes"><button class="btn primary sm" data-act="backup-agora">Fazer backup agora</button><button class="btn sm" data-act="backup-depois">Lembrar depois</button></div></div>';
 }
+function avisoFatura(keys,alvo){
+  if(!algumFechamento()||!keys.length)return '';
+  var ult=keys[keys.length-1];
+  if(keys.indexOf(alvo)>-1||alvo<=ult)return '';
+  var prox=somaMeses(ult,1);
+  if(S.avisoFaturaOculto===prox+'|'+diaStr())return '';
+  var La=lab(alvo),Lp=lab(prox);
+  return '<div class="aviso"><p><b>A fatura de '+La.nome+' já abriu.</b> '+(prox===alvo?'Esse mês ainda não foi criado.':'Faltam meses para chegar nela; os meses são criados em ordem, a partir de '+Lp.nome+'.')+'</p><div class="acoes"><button class="btn primary sm" data-act="fatura-criar" data-k="'+prox+'">Criar '+Lp.nome+'</button><button class="btn sm" data-act="fatura-depois" data-k="'+prox+'">Agora não</button></div></div>';
+}
 function vazioMes(){
   return '<div class="vazio"><h2>Vamos começar</h2><p>Importe o seu histórico, se você já tem um backup, ou comece um mês do zero.</p>'+
     '<button class="btn primary" data-act="importar">Importar histórico (.json)</button><button class="btn" data-act="mes-branco">Começar do zero</button></div>';
@@ -698,13 +731,14 @@ function vMes(){
   if(!S.pronto)return '<div class="skel"></div><div class="skel"></div>';
   var keys=mesKeys();
   if(!keys.length)return vazioMes();
-  S.mesSel=escolher(keys,S.mesSel);
+  var alvo=mesAtualAlvo();S.alvoAtual=alvo;
+  if(!(S.mesManualDia===diaStr()&&S.mesSel&&keys.indexOf(S.mesSel)>-1))S.mesSel=melhorMes(keys,alvo);
   var k=S.mesSel,doc=S.D.meses[k],L=lab(k),V=visao(doc),F=S.F;
   if(S.inst!=='todas'&&!instsDoMes(doc).some(function(i){return i.id===S.inst;}))S.inst='todas';
   var multiAno=keys.some(function(z){return lab(z).y!==L.y;});
   var chips=keys.map(function(x){
     var l=lab(x);
-    return '<button class="chip" data-act="mes" data-k="'+x+'" aria-pressed="'+(x===k)+'"'+(x===hojeKey()?' data-hoje="1"':'')+'>'+l.abr+(multiAno?' \''+String(l.y).slice(2):'')+'</button>';
+    return '<button class="chip" data-act="mes" data-k="'+x+'" aria-pressed="'+(x===k)+'"'+(x===S.alvoAtual?' data-hoje="1"':'')+'>'+l.abr+(multiAno?' \''+String(l.y).slice(2):'')+'</button>';
   }).join('')+'<button class="chip add" data-act="novo-mes">+ mês</button>';
   var insts='<button class="inst" role="tab" aria-selected="'+(S.inst==='todas')+'" data-act="inst" data-i="todas"><span class="cn">Todas</span><span class="cv">'+brl(V.todas)+'</span></button>'+
     instsDoMes(doc).map(function(I){
@@ -720,7 +754,7 @@ function vMes(){
   if(F.categoria)ativos.push('<button data-act="f-limpar" data-w="categoria">'+esc(F.categoria)+'</button>');
   var rot=(nf||S.inst!=='todas')?'Total da seleção':'Total do mês';
   var itens=V.lista.map(itemHtml).join('');
-  return avisoBackup()+
+  return avisoFatura(keys,alvo)+avisoBackup()+
     '<div class="chips" id="chips">'+chips+'</div>'+
     '<div class="mes-head"><h2>'+L.nome+'<small>'+L.y+'</small></h2><div class="mes-total">'+rot+'<b>'+brl(V.total)+'</b></div></div>'+
     '<div class="busca-linha"><input type="search" id="busca" placeholder="Buscar compra, categoria…" value="'+esc(F.busca)+'" autocomplete="off"><button class="btn-filtro" data-act="filtros" aria-label="Filtros">Filtros'+(nf?' <b>'+nf+'</b>':'')+'</button></div>'+
@@ -976,13 +1010,13 @@ async function excluirMes(){
   fecharSheet();
   try{await criarSnap('antes de excluir '+lab(k).nome+' '+lab(k).y);}catch(e){}
   var keys=mesKeys(),i=keys.indexOf(k),viz=keys[i-1]||keys[i+1]||null;
-  delete S.D.meses[k];S.mesExcluido={k:k,doc:doc};S.mesSel=viz;S.desfazer=null;S.deletado=null;
+  delete S.D.meses[k];S.mesExcluido={k:k,doc:doc};if(viz)escolherMes(viz);else S.mesSel=null;S.desfazer=null;S.deletado=null;
   await persistLote([],['mes:'+k]);
   render();toast('Mês excluído.',{act:'undo-mes',label:'Desfazer'});
 }
 function desfazerMes(){
   var d=S.mesExcluido;if(!d||S.D.meses[d.k])return;
-  S.D.meses[d.k]=d.doc;S.mesExcluido=null;S.mesSel=d.k;S.scrollChip=true;$('#toast').hidden=true;
+  S.D.meses[d.k]=d.doc;S.mesExcluido=null;escolherMes(d.k);S.scrollChip=true;$('#toast').hidden=true;
   persistLote([['mes:'+d.k,d.doc]],[]);render();
 }
 
@@ -1146,7 +1180,7 @@ function criarMes(){
   document.querySelectorAll('#sheet-body [data-n]').forEach(function(cb){if(cb.checked)marc.push(+cb.dataset.n);});
   marc.sort(function(a,b){return a-b;});
   var doc={chave:N.nk,lancamentos:marc.map(function(i){var l=clone(N.prop[i].novo);l.id=novoId();return l;}),fechamento:{},euAPagar:{valor:null},notas:''};
-  S.mesSel=N.nk;S.aba='mes';S.scrollChip=true;
+  escolherMes(N.nk);S.aba='mes';S.scrollChip=true;
   fecharSheet();salvarMes(N.nk,doc);
 }
 function criarMesEmBranco(){
@@ -1318,7 +1352,7 @@ function vPrev(){
   var blocos=doc.blocos.map(function(b,bi){
     var c=C[bi];
     var lin=function(arr,t){return arr.map(function(e){
-      return '<button class="lin '+(t==='entradas'?'ent':'')+'" data-act="linha" data-b="'+esc(b.id)+'" data-t="'+t+'" data-id="'+esc(e.id)+'"><span>'+esc(e.nome)+(e.nota?'<small>'+esc(e.nota)+'</small>':'')+'</span><span class="v">'+(t==='entradas'?'+ ':'')+brl(num0(e.valor))+'</span></button>';
+      return '<button class="lin '+(t==='entradas'?'ent':'sai')+'" data-act="linha" data-b="'+esc(b.id)+'" data-t="'+t+'" data-id="'+esc(e.id)+'"><span>'+esc(e.nome)+(e.nota?'<small>'+esc(e.nota)+'</small>':'')+'</span><span class="v">'+(t==='entradas'?'+ ':'')+brl(num0(e.valor))+'</span></button>';
     }).join('');};
     return '<section class="bloco"><header><button data-act="bloco-editar" data-b="'+esc(b.id)+'" aria-label="Editar '+esc(b.titulo)+'"><h3>'+esc(b.titulo)+'</h3></button><span class="resta'+(c.resta<0?' neg':'')+'">Resta '+brl(c.resta)+'</span></header>'+
       (b.carregaSaldo?'<div class="lin saldo"><span>Sobra do bloco anterior</span><span class="v">'+brl(c.ini)+'</span></div>':'')+
@@ -1326,7 +1360,31 @@ function vPrev(){
       '<div class="add"><button data-act="linha-nova" data-b="'+esc(b.id)+'" data-t="entradas">+ Entrada</button><button data-act="linha-nova" data-b="'+esc(b.id)+'" data-t="saidas">+ Saída</button></div></section>';
   }).join('');
   return '<div class="chips">'+chips+'</div><div class="mes-head"><h2>'+lab(k).nome+'<small>'+lab(k).y+'</small></h2></div>'+blocos+
-    '<button class="btn block" data-act="bloco-novo">+ Novo bloco de datas</button>';
+    '<button class="btn block" data-act="bloco-novo">+ Novo bloco de datas</button>'+
+    '<button class="btn danger block" style="margin-top:16px" data-act="prev-excluir">Excluir este mês</button>';
+}
+function abrirExcluirPrev(){
+  var k=S.prevSel,doc=S.D.prevs[k];if(!doc)return;
+  var L=lab(k),n=doc.blocos.length;
+  S.edit={tipo:'excluir-prev',k:k};
+  abrirSheet('<h2>Excluir a previsão de '+L.nome+' '+L.y+'?</h2><p class="sub">'+n+' bloco'+(n===1?'':'s')+' de datas, com as entradas e saídas, serão removidos.</p>'+
+    '<p class="hint" style="margin:0 0 14px">A aba Mês e as compras do mês não mudam. O app guarda uma cópia antes e dá para desfazer logo depois.</p>'+
+    '<div class="acoes"><span class="sp"></span><button class="btn" data-act="sheet-close">Cancelar</button><button class="btn danger" data-act="prev-excluir-ok">Excluir mês</button></div>',false);
+}
+async function excluirPrev(){
+  var E=S.edit;if(!E||E.tipo!=='excluir-prev')return;
+  var k=E.k,doc=S.D.prevs[k];if(!doc)return;
+  fecharSheet();
+  try{await criarSnap('antes de excluir previsão de '+lab(k).nome+' '+lab(k).y);}catch(e){}
+  var keys=prevKeys(),i=keys.indexOf(k),viz=keys[i-1]||keys[i+1]||null;
+  delete S.D.prevs[k];S.prevExcluida={k:k,doc:doc};S.prevSel=viz;
+  await persistLote([],['prev:'+k]);
+  render();toast('Previsão excluída.',{act:'undo-prev',label:'Desfazer'});
+}
+function desfazerPrev(){
+  var d=S.prevExcluida;if(!d||S.D.prevs[d.k])return;
+  S.D.prevs[d.k]=d.doc;S.prevExcluida=null;S.prevSel=d.k;S.scrollChip=true;$('#toast').hidden=true;
+  persistLote([['prev:'+d.k,d.doc]],[]);render();
 }
 function acharBloco(doc,bid){return doc.blocos.find(function(b){return b.id===bid;});}
 function abrirLinha(bid,t,id){
@@ -1448,6 +1506,8 @@ function abrirInst(id){
   abrirSheet('<h2>'+(novo?'Nova instituição':'Editar instituição')+'</h2><p class="sub">'+(novo?'Cartão, conta, financiamento… qualquer lugar onde as compras ficam registradas.':uso+' lançamento'+(uso===1?'':'s')+' nesta instituição.')+'</p>'+
     '<label class="f"><span>Nome</span><input id="i-nome" value="'+esc(I.nome)+'" autocomplete="off" placeholder="Ex.: Itaú, Inter, C&A"></label>'+
     '<label class="f"><span>Tipo</span><select id="i-tipo">'+Object.keys(TIPOS_INST).map(function(t){return '<option value="'+t+'"'+(I.tipo===t?' selected':'')+'>'+TIPOS_INST[t]+'</option>';}).join('')+'</select></label>'+
+    '<label class="f"><span>Dia de fechamento da fatura</span><input id="i-dia" inputmode="numeric" placeholder="Ex.: 8" value="'+(I.diaFechamento||'')+'" autocomplete="off"></label>'+
+    '<p class="hint" style="margin:-4px 0 14px">Depois desse dia, a aba Mês passa a abrir no mês da próxima fatura. Deixe em branco para seguir o calendário.</p>'+
     '<div class="grupo" style="margin-top:0">Cor</div>'+swatchesHtml(I.cor)+
     '<div class="grupo">Quem divide as compras aqui</div>'+
     pessoasAtivas().map(function(p){return '<label class="chk" style="margin:2px 0 6px"><input type="checkbox" data-pi="'+esc(p.id)+'"'+((I.pessoas||[]).indexOf(p.id)>-1?' checked':'')+'><span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+p.cor+';margin-right:6px"></i>'+esc(p.nome)+'</span></label>';}).join('')+
@@ -1458,14 +1518,22 @@ function salvarInst(){
   var E=S.edit;if(!E||E.tipo!=='inst')return;
   var nome=$('#i-nome').value.trim();if(!nome){toast('Informe o nome.');$('#i-nome').focus();return;}
   var pessoas=[];document.querySelectorAll('#sheet-body [data-pi]').forEach(function(cb){if(cb.checked)pessoas.push(cb.dataset.pi);});
+  var diaTxt=$('#i-dia').value.trim(),dia=null;
+  if(diaTxt){
+    dia=parseInt(diaTxt,10);
+    if(!/^\d{1,2}$/.test(diaTxt)||dia<1||dia>31){toast('O dia de fechamento vai de 1 a 31.');$('#i-dia').focus();return;}
+  }
   var cfg=clone(CFG());
   if(E.id){
     var I=cfg.instituicoes.find(function(i){return i.id===E.id;});
     // pessoas arquivadas que já aparecem nesta instituição continuam listadas
     (I.pessoas||[]).forEach(function(id){var P=pessoa(id);if(P&&P.ativa===false&&pessoas.indexOf(id)<0)pessoas.push(id);});
     I.nome=nome;I.tipo=$('#i-tipo').value;I.cor=E.cor;I.pessoas=pessoas;I.ativa=$('#i-ativa').checked;
+    if(dia)I.diaFechamento=dia;else delete I.diaFechamento;
   }else{
-    cfg.instituicoes.push({id:slug(nome)+'-'+Math.random().toString(36).slice(2,5),nome:nome,tipo:$('#i-tipo').value,cor:E.cor,pessoas:pessoas,ativa:true});
+    var nova={id:slug(nome)+'-'+Math.random().toString(36).slice(2,5),nome:nome,tipo:$('#i-tipo').value,cor:E.cor,pessoas:pessoas,ativa:true};
+    if(dia)nova.diaFechamento=dia;
+    cfg.instituicoes.push(nova);
   }
   fecharSheet();salvarConfig(cfg);
 }
@@ -1616,7 +1684,7 @@ async function aplicarImport(modo){
       Object.keys(d.prevs).forEach(function(k){if(!novo.prevs[k]){novo.prevs[k]=d.prevs[k];entradas.push(['prev:'+k,d.prevs[k]]);}});
       await gravarLote(entradas,false);
     }
-    S.D=novo;S.mesSel=null;S.prevSel=null;S.inst='todas';S.F.pessoa=null;S.H={pessoa:null,inst:null,de:null,ate:null,busca:''};
+    S.D=novo;S.mesSel=null;S.mesManualDia=null;S.prevSel=null;S.inst='todas';S.F.pessoa=null;S.H={pessoa:null,inst:null,de:null,ate:null,busca:''};
     fecharSheet();S.aba='mes';S.scrollChip=true;setStatus('salvo');render();
     toast(modo==='substituir'?'Histórico importado.':'Dados acrescentados.');
   }catch(e){toast('A importação falhou. Nada foi alterado.');}
@@ -1664,7 +1732,7 @@ function vAjustes(){
   }).join('');
   var instsHtml=cfg.instituicoes.map(function(i){
     var n=usoInst(i.id),nomes=(i.pessoas||[]).map(function(id){return pessoa(id)?pessoa(id).nome:null;}).filter(Boolean).join(', ');
-    return '<button class="row-ajuste" data-act="inst-edit" data-id="'+esc(i.id)+'"><span class="dot" style="background:'+i.cor+'"></span><span class="rt">'+esc(i.nome)+'<small>'+TIPOS_INST[i.tipo||'outro']+' · '+n+' lançamento'+(n===1?'':'s')+(nomes?' · '+esc(nomes):'')+'</small></span>'+(i.ativa===false?'<span class="arq">arquivada</span>':'')+'</button>';
+    return '<button class="row-ajuste" data-act="inst-edit" data-id="'+esc(i.id)+'"><span class="dot" style="background:'+i.cor+'"></span><span class="rt">'+esc(i.nome)+'<small>'+TIPOS_INST[i.tipo||'outro']+(i.diaFechamento?' · fecha dia '+i.diaFechamento:'')+' · '+n+' lançamento'+(n===1?'':'s')+(nomes?' · '+esc(nomes):'')+'</small></span>'+(i.ativa===false?'<span class="arq">arquivada</span>':'')+'</button>';
   }).join('');
   var compras=mesKeys().reduce(function(s,k){return s+S.D.meses[k].lancamentos.length;},0);
   var ult=S.meta.ultimoBackup?new Date(S.meta.ultimoBackup).toLocaleDateString('pt-BR'):'nunca';
@@ -1968,8 +2036,10 @@ document.addEventListener('click',function(e){
   if(a==='sheet-bg'){if(e.target===t)fecharSheet();return;}
   switch(a){
     case 'aba':S.aba=t.dataset.aba;S.scrollChip=true;if(S.aba==='ajustes')listarSnaps().then(function(){if(S.aba==='ajustes')render();});render();window.scrollTo(0,0);break;
-    case 'mes':S.mesSel=t.dataset.k;S.scrollChip=true;render();break;
-    case 'inst':S.inst=t.dataset.i;render();break;
+    case 'mes':escolherMes(t.dataset.k);S.scrollChip=true;render();break;
+    case 'inst':S.inst=t.dataset.i;S.scrollChip=true;render();break;
+    case 'fatura-criar':abrirNovoMes(t.dataset.k);break;
+    case 'fatura-depois':S.avisoFaturaOculto=t.dataset.k+'|'+diaStr();render();break;
     case 'f-pessoa':S.F.pessoa=S.F.pessoa===t.dataset.p?null:t.dataset.p;render();break;
     case 'f-limpar':S.F[t.dataset.w]=(t.dataset.w==='tipo')?'todos':null;render();break;
     case 'f-limpar-tudo':S.F={pessoa:null,busca:'',tipo:'todos',categoria:null,ordem:'padrao'};reabrirFiltros();break;
@@ -1990,12 +2060,15 @@ document.addEventListener('click',function(e){
     case 'undo':desfazerExclusao();break;
     case 'novo-mes':abrirNovoMes();break;
     case 'mes-excluir':abrirExcluirMes();break;
+    case 'prev-excluir':abrirExcluirPrev();break;
+    case 'prev-excluir-ok':excluirPrev();break;
+    case 'undo-prev':desfazerPrev();break;
     case 'mes-excluir-ok':excluirMes();break;
     case 'undo-mes':desfazerMes();break;
     case 'novo-mes-criar':criarMes();break;
     case 'mes-branco':criarMesEmBranco();break;
     case 'sheet-close':fecharSheet();break;
-    case 'bar':S.mesSel=t.dataset.k;S.aba='mes';S.scrollChip=true;render();window.scrollTo(0,0);break;
+    case 'bar':escolherMes(t.dataset.k);S.aba='mes';S.scrollChip=true;render();window.scrollTo(0,0);break;
     case 'h-pessoa':S.H.pessoa=t.dataset.v||null;render();break;
     case 'h-inst':S.H.inst=t.dataset.v||null;render();break;
     case 'prev-sel':S.prevSel=t.dataset.k;S.scrollChip=true;render();break;
