@@ -272,6 +272,15 @@ tfoot td{border-top:1.5px solid var(--line);border-bottom:0;font-weight:700}
 body.cobrir .capa{display:flex}
 .codigo{font:700 21px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.05em;text-align:center;padding:16px 8px;border:1.5px dashed var(--line);border-radius:14px;margin:6px 0 14px;user-select:all;word-break:break-all}
 .graf-wrap{overflow-x:auto;margin:0 -4px;padding:0 4px 4px}
+
+.imrow{display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--line2);padding:8px 0}
+.imrow .chk{flex:1;min-width:0;margin:0}
+.imsel{flex:none;max-width:108px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:14px;color:var(--ink)}
+.imign{margin:14px 0 4px}
+.imign summary{cursor:pointer;font-weight:600;color:var(--ink2);padding:6px 0}
+.imign .r{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--ink2);padding:4px 0}
+.imfim{position:sticky;bottom:0;background:var(--surface);margin:12px -18px 0;padding:12px 18px 0;border-top:1px solid var(--line2)}
+.imfim .resumo{font-size:13px;color:var(--ink2);margin:0 0 8px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -291,6 +300,7 @@ body.cobrir .capa{display:flex}
 </nav>
 
 <input type="file" id="arq" accept=".json,application/json" hidden>
+<input type="file" id="arq-fatura" accept=".csv,text/csv,text/plain" hidden>
 <div id="sheet" class="overlay" data-act="sheet-bg" hidden>
   <div class="panel" role="dialog" aria-modal="true" id="sheet-body"></div>
 </div>
@@ -330,7 +340,7 @@ body.cobrir .capa{display:flex}
 /* =========================================================
    Constantes e utilitários
    ========================================================= */
-var VERSAO_APP='2.5.0';
+var VERSAO_APP='2.6.0';
 var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var PALETA=['#8A05BE','#0B7FBF','#D6336C','#198F83','#C27803','#3C8D2F','#E8590C','#5C7CFA','#7048E8','#868E96'];
@@ -401,7 +411,7 @@ var S={
   fechAberto:false,deletado:null,edit:null,novoMes:null,import:null,scrollChip:true,
   tt:null,closeT:null,sheetPushed:false,skipPop:false,installEv:null,persistido:null,snaps:[],
   bloqueado:false,acaoPendente:null,ocultoEm:0,bioOk:null,
-  mesManualDia:null,alvoAtual:null,avisoFaturaOculto:null,prevExcluida:null
+  mesManualDia:null,alvoAtual:null,avisoFaturaOculto:null,prevExcluida:null,fat:null
 };
 var mesKeys=function(){return Object.keys(S.D.meses).sort();};
 var prevKeys=function(){return Object.keys(S.D.prevs).sort();};
@@ -599,7 +609,7 @@ function fecharSheet(dePop){
   s.classList.remove('open');
   clearTimeout(S.closeT);
   S.closeT=setTimeout(function(){s.hidden=true;$('#sheet-body').innerHTML='';},180);
-  S.edit=null;S.novoMes=null;S.import=null;
+  S.edit=null;S.novoMes=null;S.import=null;S.fat=null;
   if(S.sheetPushed){
     S.sheetPushed=false;
     if(!dePop){S.skipPop=true;try{history.back();}catch(e){S.skipPop=false;}}
@@ -762,6 +772,7 @@ function vMes(){
     '<div class="insts" role="tablist">'+insts+'</div>'+
     '<div class="pessoas">'+pessoasChips+'</div>'+
     '<div class="lista">'+(itens||'<div class="vazio-lista">'+(doc.lancamentos.length?'Nenhuma compra com esses filtros.':'Nenhuma compra neste mês. Toque no + para adicionar.')+'</div>')+'</div>'+
+    '<button class="btn block" style="margin-top:12px" data-act="imp-fatura">Importar fatura (.csv)</button>'+
     fechHtml(doc)+
     '<button class="btn danger block" style="margin-top:16px" data-act="mes-excluir">Excluir este mês</button>';
 }
@@ -995,6 +1006,221 @@ function salvarFech(inp){
   salvarMes(k,doc);
 }
 
+/* =========================================================
+   Importar fatura (CSV com as colunas date, title e amount)
+   ========================================================= */
+var IM_STOP={pdv:1,nupay:1,ltda:1,com:1,loja:1,lojas:1,parcela:1,mag:1,ebw:1};
+/* arredonda para a dezena mais próxima (42,38 vira 40; 45,00 vira 50); compra pequena vira 10, nunca 0 */
+function arred10(v){var r=Math.round(v/10+1e-9)*10;return(r<=0&&v>0)?10:r;}
+function valorFatura(s){
+  s=String(s==null?'':s).trim();
+  var neg=/^[-−–(]/.test(s)||/^R\$\s*[-−–]/.test(s);
+  s=s.replace(/[^0-9.,]/g,'');
+  if(!s)return NaN;
+  if(s.indexOf(',')>-1)s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+  var n=Number(s);
+  return isFinite(n)?(neg?-n:n):NaN;
+}
+function dataFatura(s){
+  s=String(s||'').trim();
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  return m?m[3]+'-'+m[2]+'-'+m[1]:null;
+}
+function dataCurta(iso){var a=iso.split('-');return a[2]+'/'+a[1];}
+function csvLinhas(txt){
+  txt=String(txt).replace(/^\uFEFF/,'');
+  var prim=txt.split(/\r?\n/)[0]||'',sep=(prim.split(';').length>prim.split(',').length)?';':',';
+  var rows=[],row=[],cur='',q=false;
+  for(var i=0;i<txt.length;i++){
+    var c=txt[i];
+    if(q){if(c==='"'){if(txt[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=c;}
+    else if(c==='"')q=true;
+    else if(c===sep){row.push(cur);cur='';}
+    else if(c==='\n'||c==='\r'){
+      if(c==='\r'&&txt[i+1]==='\n')i++;
+      row.push(cur);cur='';
+      if(row.length>1||row[0]!=='')rows.push(row);
+      row=[];
+    }else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);if(row.length>1||row[0]!=='')rows.push(row);}
+  return rows;
+}
+function lerTituloFatura(t){
+  var m=/\s*-?\s*Parcela\s+(\d+)\s*\/\s*(\d+)\s*$/i.exec(t);
+  return m?{nome:t.slice(0,m.index).trim(),parcela:(+m[1])+'/'+(+m[2])}:{nome:t,parcela:null};
+}
+function parseFatura(txt,nomeArq){
+  var rows=csvLinhas(txt);
+  if(rows.length<2)return{erro:'O arquivo está vazio.'};
+  var cab=rows[0].map(function(c){return norm(c).replace(/[^a-z]/g,'');});
+  var ix=function(nomes){for(var i=0;i<cab.length;i++)if(nomes.indexOf(cab[i])>-1)return i;return -1;};
+  var cd=ix(['date','data']),ct=ix(['title','titulo','descricao','estabelecimento','historico','lancamento']),cv=ix(['amount','valor']);
+  if(cd<0||ct<0||cv<0)return{erro:'Não reconheci o formato. O arquivo precisa ter as colunas date, title e amount.'};
+  var linhas=[],ignoradas=[];
+  rows.slice(1).forEach(function(r){
+    var data=dataFatura(r[cd]),tit=String(r[ct]||'').replace(/\s+/g,' ').trim(),val=valorFatura(r[cv]);
+    if(!tit&&Number.isNaN(val))return;
+    if(!data||Number.isNaN(val)||!tit){ignoradas.push({data:data||'',titulo:tit||'(sem descrição)',valor:Number.isNaN(val)?0:val,motivo:'Linha não entendida'});return;}
+    if(val<=0){ignoradas.push({data:data,titulo:tit,valor:val,motivo:/pagamento/i.test(tit)?'Pagamento':'Crédito ou desconto'});return;}
+    var t=lerTituloFatura(tit);
+    linhas.push({i:linhas.length,data:data,titulo:tit,nome:t.nome,parcela:t.parcela,original:val,valor:arred10(val)});
+  });
+  if(!linhas.length)return{erro:'Não encontrei compras nesse arquivo.'};
+  var m=/(\d{4})-(\d{2})-\d{2}/.exec(nomeArq||'');
+  return{arquivo:nomeArq||'fatura.csv',linhas:linhas,ignoradas:ignoradas,mesArquivo:m?m[1]+'-'+m[2]:null,banco:(/^[A-Za-z]+/.exec(nomeArq||'')||[''])[0]};
+}
+
+/* reconhecer compras que já estão no app (digitadas à mão ou importadas antes) */
+function toksNome(s){return norm(s).replace(/[^a-z0-9]+/g,' ').split(' ').filter(function(t){return t.length>=3&&!/^\d+$/.test(t)&&!IM_STOP[t];});}
+function tokIgual(a,b){return a===b||(Math.min(a.length,b.length)>=4&&(a.indexOf(b)===0||b.indexOf(a)===0));}
+function notaNome(E,R){
+  if(!E.length||!R.length)return 0;
+  var cE=E.filter(function(e){return R.some(function(r){return tokIgual(e,r);});}).length;
+  if(cE===E.length)return 2;
+  var cR=R.filter(function(r){return E.some(function(e){return tokIgual(e,r);});}).length;
+  if(cR===R.length)return 2;
+  return cE>0?1:0;
+}
+function descExistente(e){return '“'+e.compra+'” ('+(e.parcela||'1/1')+' · '+brl(somaV(e))+')';}
+function imDuplicadas(){
+  var F=S.fat,doc=S.D.meses[F.mes],usados={},origens={};
+  F.linhas.forEach(function(r){r.dup=null;});
+  Object.keys(S.D.meses).forEach(function(k){S.D.meses[k].lancamentos.forEach(function(l){if(l.imp)origens[l.imp.d+'|'+l.imp.t+'|'+l.imp.v]=l;});});
+  F.linhas.forEach(function(r){
+    var o=origens[r.data+'|'+r.titulo+'|'+r.original];
+    if(!o)return;
+    r.dup={motivo:'Já importada antes'};
+    if(doc.lancamentos.some(function(x){return x.id===o.id;}))usados[o.id]=1;
+  });
+  var cands=[];
+  F.linhas.forEach(function(r){
+    if(r.dup)return;
+    var rp=parseParcela(r.parcela),rt=toksNome(r.nome);
+    doc.lancamentos.forEach(function(e){
+      if(e.inst!==F.inst||usados[e.id])return;
+      var ep=parseParcela(e.parcela),ns=notaNome(toksNome(e.compra),rt);
+      var ps=(rp&&ep&&rp.x===ep.x&&rp.y===ep.y)?2:((!rp&&(!ep||ep.y<=1))?1:0);
+      var vs=Math.abs(somaV(e)-r.valor)<0.005?2:0;
+      var ok=(ns>=1&&ps===2)||(ns>=1&&ps>=1&&vs===2)||(ns===2&&vs===2)||(ps===2&&vs===2&&!!rp);
+      if(ok)cands.push({r:r,e:e,ns:ns,score:ns*3+ps*2+vs*2});
+    });
+  });
+  cands.sort(function(a,b){return b.score-a.score;});
+  cands.forEach(function(c){
+    if(c.r.dup||usados[c.e.id])return;
+    c.r.dup={motivo:(c.ns===0?'Mesma parcela e valor de ':'Parece ser ')+descExistente(c.e)};
+    usados[c.e.id]=1;
+  });
+  F.linhas.forEach(function(r){r.incluir=!r.dup;});
+}
+
+/* tela de revisão */
+function imInstPadrao(banco){
+  var ativas=instsAtivas(),b=norm(banco||'');
+  var hit=b&&ativas.find(function(i){return norm(i.nome).indexOf(b)>-1;});
+  if(hit)return hit.id;
+  if(S.inst!=='todas'&&inst(S.inst)&&inst(S.inst).ativa!==false)return S.inst;
+  return ativas[0]?ativas[0].id:null;
+}
+function abrirImportacao(res){
+  var keys=mesKeys();
+  if(!keys.length){toast('Crie um mês antes de importar a fatura.');return;}
+  var iid=imInstPadrao(res.banco);
+  if(!iid){toast('Cadastre uma instituição em Ajustes antes de importar.');return;}
+  var I=inst(iid),mf=mesDaFatura(I);
+  var mes=(res.mesArquivo&&keys.indexOf(res.mesArquivo)>-1)?res.mesArquivo:(keys.indexOf(mf)>-1?mf:((S.mesSel&&keys.indexOf(S.mesSel)>-1)?S.mesSel:keys[keys.length-1]));
+  var pess=pessoasAtivas(),def=pess.find(function(p){return p.id==='eu';})||pess[0];
+  if(!def){toast('Cadastre uma pessoa em Ajustes antes de importar.');return;}
+  res.linhas.forEach(function(r){r.pessoa=def.id;r.manual=false;});
+  S.fat={arquivo:res.arquivo,inst:iid,mes:mes,pessoa:def.id,linhas:res.linhas,ignoradas:res.ignoradas,mesArquivo:res.mesArquivo};
+  imAjustarPessoas();imDuplicadas();
+  abrirSheet(imHtml(),false);
+}
+function imPessoasIds(){
+  var F=S.fat,I=inst(F.inst),ativas=pessoasAtivas().map(function(p){return p.id;});
+  var ids=(I&&I.pessoas&&I.pessoas.length)?I.pessoas.filter(function(id){return ativas.indexOf(id)>-1;}):ativas;
+  return ids.length?ids:ativas;
+}
+function imAjustarPessoas(){
+  var F=S.fat,ids=imPessoasIds();
+  if(ids.indexOf(F.pessoa)<0)F.pessoa=ids.indexOf('eu')>-1?'eu':ids[0];
+  F.linhas.forEach(function(r){if(ids.indexOf(r.pessoa)<0){r.pessoa=F.pessoa;r.manual=false;}else if(!r.manual)r.pessoa=F.pessoa;});
+}
+function imHtml(){
+  var F=S.fat,keys=mesKeys();
+  var opt=function(v,txt,sel){return '<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(txt)+'</option>';};
+  var instOpts=CFG().instituicoes.filter(function(i){return i.ativa!==false||i.id===F.inst;}).map(function(i){return opt(i.id,i.nome,i.id===F.inst);}).join('');
+  var mesOpts=keys.map(function(k){var l=lab(k);return opt(k,l.nome+' '+l.y,k===F.mes);}).join('');
+  var pessOpts=function(sel){return imPessoasIds().map(function(id){return pessoa(id);}).filter(Boolean).map(function(p){return opt(p.id,p.nome,p.id===sel);}).join('');};
+  var novas=F.linhas.filter(function(r){return !r.dup;}),dups=F.linhas.filter(function(r){return !!r.dup;});
+  var linha=function(r){
+    var val=Math.abs(r.original-r.valor)<0.005?brl(r.valor):brl(r.original)+' → <b>'+brl(r.valor)+'</b>';
+    var min=(r.valor===10&&r.original<5)?' (mínimo de R$ 10)':'';
+    return '<div class="imrow"><label class="chk"><input type="checkbox" data-im="'+r.i+'"'+(r.incluir?' checked':'')+'><span><b>'+esc(r.nome)+'</b>'+(r.parcela?' <span class="tag">'+esc(r.parcela)+'</span>':'')+
+      '<br><span class="mut">'+dataCurta(r.data)+' · '+val+min+(r.dup?'<br>'+esc(r.dup.motivo):'')+'</span></span></label>'+
+      '<select class="imsel" data-impes="'+r.i+'" aria-label="Pessoa de '+esc(r.nome)+'">'+pessOpts(r.pessoa)+'</select></div>';
+  };
+  var marc=F.linhas.filter(function(r){return r.incluir;}),soma=marc.reduce(function(s,r){return s+r.valor;},0);
+  var ign=F.ignoradas.length?'<details class="imign"><summary>Ignoradas ('+F.ignoradas.length+'): pagamentos e descontos</summary>'+F.ignoradas.map(function(g){
+    return '<div class="r"><span>'+(g.data?dataCurta(g.data)+' · ':'')+esc(g.titulo)+'</span><span>'+brl(Math.abs(g.valor))+'</span></div>';
+  }).join('')+'</details>':'';
+  var aviso=(F.mesArquivo&&keys.indexOf(F.mesArquivo)<0)?'<p class="hint" style="margin:-4px 0 10px">O arquivo indica '+esc(lab(F.mesArquivo).nome+' '+lab(F.mesArquivo).y)+', que ainda não existe. Crie esse mês em “+ mês” se quiser importar nele.</p>':'';
+  return '<h2>Importar fatura</h2><p class="sub">'+esc(F.arquivo)+' · '+F.linhas.length+' compra'+(F.linhas.length===1?'':'s')+' lida'+(F.linhas.length===1?'':'s')+'</p>'+
+    '<div class="duo"><label class="f"><span>Instituição</span><select id="im-inst">'+instOpts+'</select></label><label class="f"><span>Mês da fatura</span><select id="im-mes">'+mesOpts+'</select></label></div>'+aviso+
+    '<label class="f"><span>Atribuir as compras a</span><select id="im-pessoa">'+pessOpts(F.pessoa)+'</select></label>'+
+    '<p class="hint" style="margin:-4px 0 6px">Os valores são arredondados para a dezena mais próxima (42,38 vira 40; 45,00 vira 50). Você pode trocar a pessoa de cada compra.</p>'+
+    '<div class="grupo">Novas compras ('+novas.length+')</div>'+(novas.map(linha).join('')||'<p class="hint">Nenhuma compra nova neste arquivo.</p>')+
+    (dups.length?'<div class="grupo">Parecem já estar no app ('+dups.length+')</div><p class="hint" style="margin:0 0 4px">Ficam de fora. Marque uma se quiser importar mesmo assim.</p>'+dups.map(linha).join(''):'')+ign+
+    '<div class="imfim"><p class="resumo">'+marc.length+' compra'+(marc.length===1?'':'s')+' marcada'+(marc.length===1?'':'s')+' · '+brl(soma)+'</p><div class="acoes" style="margin:0 0 12px"><span class="sp"></span><button class="btn" data-act="sheet-close">Cancelar</button><button class="btn primary" data-act="imp-ok"'+(marc.length?'':' disabled')+'>Importar'+(marc.length?' '+marc.length:'')+'</button></div></div>';
+}
+function imRender(){var y=$('#sheet-body').scrollTop;abrirSheet(imHtml(),false);$('#sheet-body').scrollTop=y;}
+function imAtualizar(id,val){
+  var F=S.fat;if(!F)return;
+  if(id==='im-inst'){F.inst=val;imAjustarPessoas();imDuplicadas();}
+  else if(id==='im-mes'){F.mes=val;imDuplicadas();}
+  else if(id==='im-pessoa'){F.pessoa=val;F.linhas.forEach(function(r){if(!r.manual)r.pessoa=val;});}
+  imRender();
+}
+function confirmarImportacao(){
+  var F=S.fat;if(!F)return;
+  var sel=F.linhas.filter(function(r){return r.incluir;});
+  if(!sel.length){toast('Nenhuma compra marcada.');return;}
+  var W=novoW(),doc=docTrab(W,F.mes);
+  if(!doc){toast('O mês escolhido não existe mais.');return;}
+  var soma=0,cad={adicionados:0,faltam:0};
+  sel.forEach(function(r){
+    var item={id:novoId(),compra:r.nome,parcela:r.parcela||'1/1',v:{},inst:F.inst,recorrente:false,adiant:null,imp:{d:r.data,t:r.titulo,v:r.original}};
+    item.v[r.pessoa||F.pessoa]=r.valor;soma+=r.valor;
+    doc.lancamentos.push(item);
+    if(parcelado(item)){item.grupo=novoId();var c=alinharCadeia(W,F.mes,item);cad.adicionados+=c.adicionados;cad.faltam+=c.faltam;}
+  });
+  var mes=F.mes;
+  fecharSheet();
+  escolherMes(mes);S.inst='todas';S.aba='mes';S.scrollChip=true;
+  aplicarLote(W,sel.length+' compra'+(sel.length===1?' importada':'s importadas')+' ('+brl(soma)+').'+(cad.adicionados?' As parcelas seguintes entraram em '+cad.adicionados+' lançamento'+(cad.adicionados===1?'':'s')+' dos meses que já existem.':''));
+}
+function lerFatura(file){
+  var tentar=function(cod,depois){
+    var r=new FileReader();
+    r.onload=function(){depois(String(r.result));};
+    r.onerror=function(){toast('Não consegui abrir o arquivo.');};
+    r.readAsText(file,cod);
+  };
+  tentar('utf-8',function(txt){
+    if(txt.indexOf('\uFFFD')>-1)return tentar('windows-1252',function(t2){concluirLeitura(t2,file.name);});
+    concluirLeitura(txt,file.name);
+  });
+}
+function concluirLeitura(txt,nome){
+  var res=parseFatura(txt,nome);
+  if(res.erro){toast(res.erro);return;}
+  abrirImportacao(res);
+}
+
 /* ---------- excluir mês ---------- */
 function abrirExcluirMes(){
   var k=S.mesSel,doc=S.D.meses[k];if(!doc)return;
@@ -1057,7 +1283,7 @@ function alinharCadeia(W,k0,base){
     var irmao=doc.lancamentos.find(function(l){return l.grupo===base.grupo;});
     if(irmao){if(irmao.parcela!==rotulo)irmao.parcela=rotulo;}
     else if(!jaTem(doc,base,rotulo)){
-      var c=clone(base);c.id=novoId();c.parcela=rotulo;c.adiant=null;doc.lancamentos.push(c);r.adicionados++;r.meses.push(kj);
+      var c=clone(base);c.id=novoId();c.parcela=rotulo;c.adiant=null;delete c.imp;doc.lancamentos.push(c);r.adicionados++;r.meses.push(kj);
     }
   }
   var fim=somaMeses(k0,m);
@@ -1128,7 +1354,7 @@ function proposta(T){
     var B=antes[antes.length-1],d=difMeses(B,T);
     S.D.meses[B].lancamentos.forEach(function(l){
       var p=parseParcela(l.parcela),novo=clone(l),st,extra='',qtd=l.adiant?num0(l.adiant.qtd):0;
-      novo.adiant=null;
+      novo.adiant=null;delete novo.imp;
       if(l.recorrente){st='continua';}
       else if(p&&p.y>1){
         var nx=p.x+d+qtd;
@@ -1146,7 +1372,7 @@ function proposta(T){
     S.D.meses[L].lancamentos.forEach(function(l){
       var p=parseParcela(l.parcela);
       if(l.recorrente||!p||p.y<=1||p.x-e<1||vistos[chaveCadeia(l)])return;
-      var novo=clone(l);novo.adiant=null;novo.parcela=(p.x-e)+'/'+p.y;
+      var novo=clone(l);novo.adiant=null;delete novo.imp;novo.parcela=(p.x-e)+'/'+p.y;
       out.push({novo:novo,st:'continua',antes:null,depois:novo.parcela,extra:'já lançada em '+mesCurto(L)});
     });
   }
@@ -2059,6 +2285,8 @@ document.addEventListener('click',function(e){
     case 'a-remover':salvarAdiantar(true);break;
     case 'undo':desfazerExclusao();break;
     case 'novo-mes':abrirNovoMes();break;
+    case 'imp-fatura':$('#arq-fatura').value='';$('#arq-fatura').click();break;
+    case 'imp-ok':confirmarImportacao();break;
     case 'mes-excluir':abrirExcluirMes();break;
     case 'prev-excluir':abrirExcluirPrev();break;
     case 'prev-excluir-ok':excluirPrev();break;
@@ -2134,6 +2362,10 @@ document.addEventListener('change',function(e){
   else if(t.dataset.hsel==='h-de'){S.H.de=t.value;if(S.H.ate&&S.H.ate<t.value)S.H.ate=t.value;render();}
   else if(t.dataset.hsel==='h-ate'){S.H.ate=t.value;if(S.H.de&&S.H.de>t.value)S.H.de=t.value;render();}
   else if(t.id==='arq'&&t.files&&t.files[0])lerArquivo(t.files[0]);
+  else if(t.id==='arq-fatura'&&t.files&&t.files[0])lerFatura(t.files[0]);
+  else if(S.fat&&(t.id==='im-inst'||t.id==='im-mes'||t.id==='im-pessoa'))imAtualizar(t.id,t.value);
+  else if(S.fat&&t.dataset.im!==undefined){S.fat.linhas[+t.dataset.im].incluir=t.checked;imRender();}
+  else if(S.fat&&t.dataset.impes!==undefined){var rr=S.fat.linhas[+t.dataset.impes];rr.pessoa=t.value;rr.manual=true;imRender();}
   else if(t.id==='nm-alvo'){abrirNovoMes(t.value);}
   else if(t.id==='lk-auto'&&lockCfg()){S.meta.bloqueio.auto=+t.value;salvarMeta();}
   else if(t.id==='f-rec')atualizarDicaParc();
