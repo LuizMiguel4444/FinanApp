@@ -369,7 +369,7 @@ body.cobrir .capa{display:flex}
 /* =========================================================
    Constantes e utilitários
    ========================================================= */
-var VERSAO_APP='2.7.0';
+var VERSAO_APP='2.8.0';
 var MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 var PALETA=['#8A05BE','#0B7FBF','#D6336C','#198F83','#C27803','#3C8D2F','#E8590C','#5C7CFA','#7048E8','#868E96'];
@@ -1295,15 +1295,15 @@ function totalFiltrado(lancs,F){
     return s+(F.pessoa?valorPessoa(l,F.pessoa):totalLanc(l));
   },0);
 }
-function simCandidatos(mes){
+function simCandidatos(mes,pessoa){
   var doc=S.D.meses[mes];if(!doc)return[];
-  return doc.lancamentos.filter(function(l){return parcelado(l)&&!l.adiant&&somaV(l)>0;}).map(function(l){
-    var p=parseParcela(l.parcela);
-    return{l:l,p:somaV(l),f:p.y-p.x,x:p.x,y:p.y};
+  return doc.lancamentos.filter(function(l){return parcelado(l)&&!l.adiant&&(pessoa?num0(l.v&&l.v[pessoa])>0:somaV(l)>0);}).map(function(l){
+    var p=parseParcela(l.parcela),pt=somaV(l);
+    return{l:l,p:pessoa?num0(l.v[pessoa]):pt,pt:pt,f:p.y-p.x,x:p.x,y:p.y};
   }).sort(function(a,b){return b.p-a.p;});
 }
 function simResultado(sm){
-  var cands=simCandidatos(sm.mes),porId={},i=simJuros();
+  var cands=simCandidatos(sm.mes,sm.pessoa),porId={},i=simJuros();
   cands.forEach(function(c){porId[c.l.id]=c;});
   var F={inst:sm.inst||null,pessoa:sm.pessoa||null};
   var sel=Object.keys(sm.itens).filter(function(id){return porId[id];}).map(function(id){
@@ -1317,18 +1317,12 @@ function simResultado(sm){
     return{c:c,q:q,auto:auto,valor:valor,cheio:cheio,alivios:alivios,fim:fim,fimNovo:fimNovo};
   });
   var pagar=0,desconto=0,alivio=0;
-  sel.forEach(function(s){pagar+=s.valor;desconto+=s.cheio-s.valor;s.alivios.forEach(function(a){alivio+=somaV(a.e);});});
+  sel.forEach(function(s){pagar+=s.valor;desconto+=s.cheio-s.valor;s.alivios.forEach(function(a){alivio+=valorMensal(a.e,{inst:null,pessoa:F.pessoa});});});
   var H=Math.min(24,sel.reduce(function(m,s){return Math.max(m,s.c.f);},0)),keys=mesKeys(),ult=keys[keys.length-1],linhas=[];
   for(var k=0;k<=H&&sel.length;k++){
     var T=somaMeses(sm.mes,k),m=modeloMes(T),antes=totalFiltrado(m.lancs,F),dep=antes;
     sel.forEach(function(s){
-      if(k===0){
-        var l=s.c.l;
-        if(!F.inst||l.inst===F.inst){
-          var sv=somaV(l);
-          dep+=F.pessoa?(sv>0?s.valor*num0(l.v[F.pessoa])/sv:0):s.valor;
-        }
-      }
+      if(k===0&&(!F.inst||s.c.l.inst===F.inst))dep+=s.valor;
       s.alivios.forEach(function(a){if(a.T===T)dep-=valorMensal(a.e,F);});
     });
     linhas.push({T:T,k:k,antes:antes,depois:dep,real:m.real,faltando:!m.real&&!m.lancs.length&&T<=ult,estimado:!m.real&&T>ult});
@@ -1337,7 +1331,7 @@ function simResultado(sm){
 }
 /* sugestões: onde adiantar compensa mais */
 function simSugestoes(sm){
-  var cands=simCandidatos(sm.mes),i=simJuros(),usados={},grupos=[];
+  var cands=simCandidatos(sm.mes,sm.pessoa),i=simJuros(),usados={},grupos=[];
   if(!cands.length)return grupos;
   var disp=sm.disp;
   var cab=function(v){return disp==null?null:v<=disp+0.005;};
@@ -1351,7 +1345,7 @@ function simSugestoes(sm){
   for(var k=1;k<=Math.min(12,maxF);k++){
     var T=somaMeses(sm.mes,k),m=modeloMes(T);
     if(!m.lancs.length)continue;
-    var tot=totalFiltrado(m.lancs,{inst:null,pessoa:null});
+    var tot=totalFiltrado(m.lancs,{inst:null,pessoa:sm.pessoa||null});
     if(!pico||tot>pico.tot)pico={T:T,k:k,tot:tot};
   }
   if(pico){
@@ -1361,11 +1355,11 @@ function simSugestoes(sm){
       var e=mp.lancs.find(function(x){return mesmaSerie(x,c.l);});
       if(!e)return;
       var q=c.f-pico.k+1;
-      pk.push({c:c,q:q,out:r2(pvParcelas(c.p,c.f,q,i)),rel:somaV(e)});
+      pk.push({c:c,q:q,out:r2(pvParcelas(c.p,c.f,q,i)),rel:valorMensal(e,{inst:null,pessoa:sm.pessoa||null})});
     });
     pk.sort(function(a,b){return (b.rel/b.out)-(a.rel/a.out)||b.rel-a.rel;});   /* o que tira mais da fatura por real gasto */
     var g2=pega(pk,3);
-    if(g2.length)grupos.push({titulo:'Aliviam a fatura mais pesada',itens:g2.map(function(x){return{c:x.c,q:x.q,out:x.out,cabe:cab(x.out),txt:mesLongo(pico.T)+' é a mais pesada das próximas ('+brl(pico.tot)+'). Adiantar '+(x.q===1?'a última parcela':'as últimas '+x.q+' parcelas')+' por '+brl(x.out)+' tira '+brl(x.rel)+' dela.'};})});
+    if(g2.length)grupos.push({titulo:'Aliviam a fatura mais pesada',itens:g2.map(function(x){return{c:x.c,q:x.q,out:x.out,cabe:cab(x.out),txt:mesLongo(pico.T)+' é a mais pesada das próximas'+(sm.pessoa&&pessoa(sm.pessoa)?' para '+pessoa(sm.pessoa).nome:'')+' ('+brl(pico.tot)+'). Adiantar '+(x.q===1?'a última parcela':'as últimas '+x.q+' parcelas')+' por '+brl(x.out)+' tira '+brl(x.rel)+' dela.'};})});
   }
   var fim=cands.filter(function(c){return c.f<=2;}).map(function(c){return{c:c,q:c.f,out:r2(pvParcelas(c.p,c.f,c.f,i))};}).sort(function(a,b){return a.out-b.out;});
   var g3=pega(fim,3);
@@ -1374,25 +1368,25 @@ function simSugestoes(sm){
 }
 function simAdd(id,q){
   var sm=simEstado();if(!sm)return;
-  var c=simCandidatos(sm.mes).find(function(x){return x.l.id===id;});if(!c)return;
+  var c=simCandidatos(sm.mes,sm.pessoa).find(function(x){return x.l.id===id;});if(!c)return;
   sm.itens[id]={qtd:Math.min(Math.max(1,q||1),c.f),valor:null};
   render();
   var el=document.getElementById('sim-card');if(el&&el.scrollIntoView)el.scrollIntoView({block:'start'});
 }
 function simQtd(id,d){
   var sm=S.sim,it=sm&&sm.itens[id];if(!it)return;
-  var c=simCandidatos(sm.mes).find(function(x){return x.l.id===id;});if(!c)return;
+  var c=simCandidatos(sm.mes,sm.pessoa).find(function(x){return x.l.id===id;});if(!c)return;
   it.qtd=Math.min(Math.max(1,(it.qtd||1)+d),c.f);it.valor=null;render();
 }
 function simQuitar(id){
   var sm=S.sim,it=sm&&sm.itens[id];if(!it)return;
-  var c=simCandidatos(sm.mes).find(function(x){return x.l.id===id;});if(!c)return;
+  var c=simCandidatos(sm.mes,sm.pessoa).find(function(x){return x.l.id===id;});if(!c)return;
   it.qtd=c.f;it.valor=null;render();
 }
 function simAbrir(id){
   var sm=S.sim;if(!sm||!sm.itens[id])return;
   var s=simResultado(sm).sel.find(function(x){return x.c.l.id===id;});if(!s)return;
-  S.simPreset={qtd:s.q,valor:r2(s.valor)};
+  S.simPreset={qtd:s.q,valor:r2(s.c.p>0?s.valor*s.c.pt/s.c.p:s.valor)};
   escolherMes(sm.mes);S.aba='mes';S.scrollChip=true;render();
   abrirItem(id);abrirAdiantar();
 }
@@ -1400,13 +1394,15 @@ function vSim(){
   if(!S.pronto)return '<div class="skel"></div>';
   var sm=simEstado();
   if(!sm)return '<div class="aviso"><p>Crie um mês na aba Mês para simular o adiantamento de parcelas.</p></div>';
-  var keys=mesKeys(),i=simJuros(),R=simResultado(sm),G=simSugestoes(sm),cands=simCandidatos(sm.mes);
+  var keys=mesKeys(),i=simJuros(),R=simResultado(sm),G=simSugestoes(sm),cands=simCandidatos(sm.mes,sm.pessoa);
   var opt=function(v,txt,sel){return '<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(txt)+'</option>';};
   var nomeInst=function(id){var I=inst(id);return I?I.nome:'';};
   var jurosTxt=S.meta&&S.meta.simJuros?fmtIn(S.meta.simJuros):'';
   var premissas='<div class="card"><h3>Simular adiantamento</h3><p class="sub">Escolha compras parceladas e veja o efeito na fatura atual e nas próximas. Nada é gravado enquanto você só simula.</p>'+
     '<div class="duo"><label class="f"><span>Mês de referência</span><select id="sim-mes">'+keys.map(function(k){return opt(k,mesLongo(k),k===sm.mes);}).join('')+'</select></label>'+
     '<label class="f"><span>Juros (% ao mês)</span><input id="sim-juros" inputmode="decimal" placeholder="0" value="'+esc(jurosTxt)+'" autocomplete="off"></label></div>'+
+    '<label class="f"><span>Pessoa considerada</span><select id="sim-pessoa">'+opt('','Todas as pessoas',!sm.pessoa)+pessoasVisiveis().map(function(P){return opt(P.id,P.nome,sm.pessoa===P.id);}).join('')+'</select></label>'+
+    (sm.pessoa&&pessoa(sm.pessoa)?'<p class="hint" style="margin:-4px 0 10px">Só entram as compras em que '+esc(pessoa(sm.pessoa).nome)+' tem parte, e os valores são a parte dessa pessoa.</p>':'')+
     '<label class="f"><span>Valor disponível para adiantar (opcional)</span><input id="sim-disp" inputmode="decimal" placeholder="Ex.: 500" value="'+esc(fmtIn(sm.disp))+'" autocomplete="off"></label>'+
     '<p class="hint" style="margin:0">'+(i>0?'Com juros de '+jurosTxt+'% ao mês, o app estima o desconto de cada parcela adiantada. É uma estimativa: vale o valor que o banco mostrar.':'Com juros em 0 (parcelas sem juros), adiantar não gera desconto: o app só mostra como os pagamentos se reorganizam. Informe os juros do parcelamento para estimar a economia.')+'</p></div>';
 
@@ -1415,10 +1411,10 @@ function vSim(){
     var itens=R.sel.map(function(s){
       var l=s.c.l;
       return '<div class="simit"><div class="l1"><span><b>'+esc(l.compra)+'</b> <span class="tag">'+s.c.x+'/'+s.c.y+'</span> <span class="mut">'+esc(nomeInst(l.inst))+'</span></span><button class="x" data-act="sim-remover" data-id="'+esc(l.id)+'" aria-label="Tirar da simulação">×</button></div>'+
-        '<p class="hint" style="margin:4px 0 0">'+brl(s.c.p)+' por mês · faltam '+s.c.f+' · '+(s.q===s.c.f?'fica quitada agora (terminaria em '+mesCurto(s.fim)+')':'termina em '+mesCurto(s.fimNovo)+' em vez de '+mesCurto(s.fim))+'</p>'+
+        '<p class="hint" style="margin:4px 0 0">'+brl(s.c.p)+' por mês'+(sm.pessoa&&pessoa(sm.pessoa)?' (parte de '+esc(pessoa(sm.pessoa).nome)+'; a compra toda é '+brl(s.c.pt)+')':'')+' · faltam '+s.c.f+' · '+(s.q===s.c.f?'fica quitada agora (terminaria em '+mesCurto(s.fim)+')':'termina em '+mesCurto(s.fimNovo)+' em vez de '+mesCurto(s.fim))+'</p>'+
         '<div class="sim-ctl"><span class="stepper"><button data-act="sim-menos" data-id="'+esc(l.id)+'" aria-label="Menos uma parcela">−</button><b>'+s.q+'</b><button data-act="sim-mais" data-id="'+esc(l.id)+'" aria-label="Mais uma parcela">+</button></span><span class="mut">parcela'+(s.q>1?'s':'')+' adiantada'+(s.q>1?'s':'')+'</span><button class="chip sm" data-act="sim-quitar" data-id="'+esc(l.id)+'">Quitar ('+s.c.f+')</button></div>'+
-        '<label class="f" style="margin:0 0 6px"><span>Valor a pagar agora</span><input data-simval="'+esc(l.id)+'" inputmode="decimal" placeholder="'+nfp(s.auto)+'" value="'+esc(sm.itens[l.id].valor!=null?fmtIn(sm.itens[l.id].valor):'')+'" autocomplete="off"></label>'+
-        '<p class="hint" style="margin:0">'+(s.cheio-s.valor>0.004?'Sem desconto seriam '+brl(s.cheio)+': economia de '+brl(s.cheio-s.valor)+'.':(s.valor-s.cheio>0.004?'Sem desconto seriam '+brl(s.cheio)+'.':'Sem desconto: '+brl(s.cheio)+'.'))+' Se o banco mostrar outro valor, digite aqui.</p>'+
+        '<label class="f" style="margin:0 0 6px"><span>Valor a pagar agora'+(sm.pessoa&&pessoa(sm.pessoa)?' (parte de '+esc(pessoa(sm.pessoa).nome)+')':'')+'</span><input data-simval="'+esc(l.id)+'" inputmode="decimal" placeholder="'+nfp(s.auto)+'" value="'+esc(sm.itens[l.id].valor!=null?fmtIn(sm.itens[l.id].valor):'')+'" autocomplete="off"></label>'+
+        '<p class="hint" style="margin:0">'+(s.cheio-s.valor>0.004?'Sem desconto seriam '+brl(s.cheio)+': economia de '+brl(s.cheio-s.valor)+'.':(s.valor-s.cheio>0.004?'Sem desconto seriam '+brl(s.cheio)+'.':'Sem desconto: '+brl(s.cheio)+'.'))+' Se o banco mostrar outro valor, digite aqui.'+(sm.pessoa&&s.c.pt>s.c.p+0.004?' Adiantar de verdade vale para a compra toda: cerca de '+brl(s.valor*s.c.pt/s.c.p)+'.':'')+'</p>'+
         '<button class="linkbtn" data-act="sim-abrir" data-id="'+esc(l.id)+'" style="margin-top:6px">Adiantar de verdade…</button></div>';
     }).join('');
     var max=Math.max.apply(null,R.linhas.map(function(x){return Math.max(x.antes,x.depois);}).concat([1]));
@@ -1431,7 +1427,6 @@ function vSim(){
         '<div class="vals">'+brl(x.antes)+' → '+brl(x.depois)+'</div></div>';
     }).join('');
     var instOpts=opt('','Todas as instituições',!sm.inst)+CFG().instituicoes.filter(function(I){return I.ativa!==false||usoInst(I.id)>0;}).map(function(I){return opt(I.id,I.nome,sm.inst===I.id);}).join('');
-    var pessOpts=opt('','Todas as pessoas',!sm.pessoa)+pessoasVisiveis().map(function(P){return opt(P.id,P.nome,sm.pessoa===P.id);}).join('');
     var sobra=(sm.disp!=null)?sm.disp-R.pagar:null;
     minha='<div class="card" id="sim-card"><h3>Minha simulação</h3>'+itens+
       '<div class="kv"><span>Pagar agora</span><b>'+brl(R.pagar)+'</b></div>'+
@@ -1439,8 +1434,8 @@ function vSim(){
       (R.desconto>0.004?'<div class="kv"><span>Desconto estimado</span><b class="dif ok">'+brl(R.desconto)+'</b></div>':'')+
       (sobra!=null?'<div class="kv"><span>'+(sobra>=0?'Sobra do valor disponível':'Falta no valor disponível')+'</span><b class="dif '+(sobra>=0?'ok':'bad')+'">'+brl(Math.abs(sobra))+'</b></div>':'')+
       '<div class="acoes" style="margin-top:12px"><button class="btn sm" data-act="sim-limpar">Limpar simulação</button></div></div>'+
-      '<div class="card"><h3>Fatura atual e próximas</h3><p class="sub">Barra cinza: como está hoje. Barra colorida: como ficaria.</p>'+
-      '<div class="duo" style="margin-bottom:6px"><label class="f" style="margin:0"><span>Instituição</span><select id="sim-inst">'+instOpts+'</select></label><label class="f" style="margin:0"><span>Pessoa</span><select id="sim-pessoa">'+pessOpts+'</select></label></div>'+
+      '<div class="card"><h3>Fatura atual e próximas</h3><p class="sub">Barra cinza: como está hoje. Barra colorida: como ficaria.'+(sm.pessoa&&pessoa(sm.pessoa)?' Valores da parte de '+esc(pessoa(sm.pessoa).nome)+'.':'')+'</p>'+
+      '<label class="f" style="margin:0 0 6px"><span>Instituição</span><select id="sim-inst">'+instOpts+'</select></label>'+
       linhas+(R.linhas.some(function(x){return x.estimado;})?'<p class="hint">≈ Estimativa: meses ainda não criados, calculados só com as parcelas já lançadas (sem compras novas nem itens que repetem todo mês).</p>':'')+'</div>';
   }
 
@@ -1454,15 +1449,15 @@ function vSim(){
       }).join('');
     }).join('')+(i>0?'':'<p class="hint">Informe os juros do parcelamento para ver também quais compras rendem mais economia.</p>');
   }else{
-    sug+='<p class="sub" style="margin:0">'+(cands.length?'Nenhuma sugestão especial para este mês. Veja a lista abaixo e simule o que quiser.':'Este mês não tem compras parceladas com parcelas a adiantar.')+'</p>';
+    sug+='<p class="sub" style="margin:0">'+(cands.length?'Nenhuma sugestão especial para este mês. Veja a lista abaixo e simule o que quiser.':'Não há compras parceladas com parcelas a adiantar'+(sm.pessoa&&pessoa(sm.pessoa)?' para '+esc(pessoa(sm.pessoa).nome):'')+' neste mês.')+'</p>';
   }
   sug+='</div>';
 
-  var lista='<div class="card"><h3>Compras que dá para adiantar ('+cands.length+')</h3>'+(cands.length?'<p class="sub">Parceladas de '+mesLongo(sm.mes)+' com parcelas pela frente, sem adiantamento.</p>'+cands.map(function(c){
+  var lista='<div class="card"><h3>Compras que dá para adiantar ('+cands.length+')</h3>'+(cands.length?'<p class="sub">Parceladas de '+mesLongo(sm.mes)+(sm.pessoa&&pessoa(sm.pessoa)?' em que '+esc(pessoa(sm.pessoa).nome)+' tem parte':'')+', com parcelas pela frente, sem adiantamento.</p>'+cands.map(function(c){
     var l=c.l,na=!!sm.itens[l.id];
-    return '<div class="simcand"><div class="tx"><b>'+esc(l.compra)+'</b> <span class="tag">'+c.x+'/'+c.y+'</span> <span class="mut">'+esc(nomeInst(l.inst))+'</span><br><span class="mut">'+brl(c.p)+' por mês · faltam '+c.f+' · termina em '+mesCurto(somaMeses(sm.mes,c.f))+'</span></div>'+
+    return '<div class="simcand"><div class="tx"><b>'+esc(l.compra)+'</b> <span class="tag">'+c.x+'/'+c.y+'</span> <span class="mut">'+esc(nomeInst(l.inst))+'</span><br><span class="mut">'+brl(c.p)+' por mês'+(sm.pessoa&&c.pt>c.p+0.004?' (compra toda: '+brl(c.pt)+')':'')+' · faltam '+c.f+' · termina em '+mesCurto(somaMeses(sm.mes,c.f))+'</span></div>'+
       (na?'<span class="mut" style="padding-top:6px">na simulação</span>':'<button class="btn sm" data-act="sim-add" data-id="'+esc(l.id)+'">Adicionar</button>')+'</div>';
-  }).join(''):'<p class="sub" style="margin:0">Nenhuma compra parcelada com parcelas a adiantar neste mês.</p>')+'</div>';
+  }).join(''):'<p class="sub" style="margin:0">'+(sm.pessoa&&pessoa(sm.pessoa)?esc(pessoa(sm.pessoa).nome)+' não tem':'Nenhuma')+' compra parcelada com parcelas a adiantar neste mês.</p>')+'</div>';
 
   return premissas+minha+sug+lista;
 }
@@ -2622,7 +2617,12 @@ document.addEventListener('change',function(e){
   else if(S.aba==='sim'&&S.sim&&t.id==='sim-juros'){var jn=parseNum(t.value);if(Number.isNaN(jn)||(jn!=null&&jn<0)){toast('Informe os juros em % ao mês, como 2 ou 1,5.');}else{S.meta.simJuros=jn||0;salvarMeta();}render();}
   else if(S.aba==='sim'&&S.sim&&t.id==='sim-disp'){var dn=parseNum(t.value);if(Number.isNaN(dn)||(dn!=null&&dn<0)){toast('Informe o valor disponível em reais, como 500 ou 350,50.');}else{S.sim.disp=dn;}render();}
   else if(S.aba==='sim'&&S.sim&&t.id==='sim-inst'){S.sim.inst=t.value;render();}
-  else if(S.aba==='sim'&&S.sim&&t.id==='sim-pessoa'){S.sim.pessoa=t.value;render();}
+  else if(S.aba==='sim'&&S.sim&&t.id==='sim-pessoa'){
+    S.sim.pessoa=t.value;
+    var idsOk=simCandidatos(S.sim.mes,S.sim.pessoa).map(function(c){return c.l.id;});
+    Object.keys(S.sim.itens).forEach(function(id){if(idsOk.indexOf(id)<0)delete S.sim.itens[id];else S.sim.itens[id].valor=null;});
+    render();
+  }
   else if(S.aba==='sim'&&S.sim&&t.dataset.simval!==undefined){var vn=parseNum(t.value),it=S.sim.itens[t.dataset.simval];if(it){if(Number.isNaN(vn)||(vn!=null&&vn<0))toast('Informe um valor em reais, como 300 ou 289,90.');else it.valor=vn;}render();}
   else if(S.fat&&(t.id==='im-inst'||t.id==='im-mes'||t.id==='im-pessoa'))imAtualizar(t.id,t.value);
   else if(S.fat&&t.dataset.im!==undefined){S.fat.linhas[+t.dataset.im].incluir=t.checked;imRender();}
